@@ -335,11 +335,15 @@ class Midpoint:
                     self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
                 case "set_class_logger":
                     self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
+                case "set_notification_configuration":
+                    self.set_notification_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
                 case _:
                     self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
     def set_system_configuration(self, modification_type, path, value):
         self._logger.debug("set_system_configuration(modification_type={}, path={}, value={}", modification_type, path, value)
+        if isinstance(value, dict):
+            value = self.json_to_xml(value)
         xml_data = """<objectModification
                 xmlns='http://midpoint.evolveum.com/xml/ns/public/common/api-types-3'
                 xmlns:c='http://midpoint.evolveum.com/xml/ns/public/common/common-3'
@@ -400,3 +404,52 @@ class Midpoint:
                 self.replace_class_logger(existing_logger_id, level)
                 return
         self.add_class_logger(package, level)
+
+    def parse_notification_configuration(self, xml_content):
+        self._logger.debug("Parsing existing handlers in notification configuration.")
+        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+        root = ElementTree.fromstring(xml_content)
+        handlers = root.findall('c:notificationConfiguration/c:handler', namespaces=ns)
+        result = []
+        for handler in handlers:
+            handler_id = handler.get('id')
+            handler_name = handler.find('c:name', namespaces=ns).text
+            entry = {
+                "handler_id": handler_id,
+                "handler_name": handler_name
+            }
+            result.append(entry)
+        self._logger.debug("Existing handlers in notification configuration: {}".format(result))
+        return result
+
+    def convert_dict(self, obj, namespace_prefix='c'):
+        elements = []
+        for key, val in obj.items():
+            if isinstance(val, dict):
+                elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, self.convert_dict(val), namespace_prefix, key))
+            else:
+                elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, val, namespace_prefix, key))
+        return ''.join(elements)
+    
+    def json_to_xml(self, json_data):
+        xml_content = self.convert_dict(json_data)
+        self._logger.debug("xml_content: {}".format(xml_content))
+        return xml_content
+    
+    #ToDo: Add support for modification_type "replace" in set_notification_configuration
+    def set_notification_configuration(self, modification_type, path, json):
+        notifier_name = json["name"]
+        self._logger.debug("notifier_name in user configuration file: {}".format(notifier_name))
+        xml_data = self.json_to_xml(json)
+        system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
+        handler_entries = self.parse_notification_configuration(system_configuration_object)
+        self._logger.debug("Existing notification handlers in xml: {}".format(handler_entries))
+        handler_id = None
+        for handler in handler_entries:
+            if handler.get('handler_name') == notifier_name:
+                self._logger.debug("Handler with name {} already exist. Skiping configuration file.".format(notifier_name))
+                handler_id = handler.get('handler_id')
+                return
+        self._logger.debug("handler_id doesnt exist: {}".format(handler_id))
+        self.set_system_configuration(modification_type, path, xml_data)
+        return
