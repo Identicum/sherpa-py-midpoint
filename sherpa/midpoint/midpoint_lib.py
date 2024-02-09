@@ -325,22 +325,22 @@ class Midpoint:
     def process_operation(self, json_data):
         self._logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
         match json_data["operation_type"]:
-                case "add_resource_inducement_to_role":
-                    self.add_resource_inducement_to_role(resource_oid=json_data.get('resource_oid'), resource_name=json_data.get('resource_name'), role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'))
-                case "add_role_inducement_to_role":
-                    self.add_role_inducement_to_role(child_oid=json_data.get('child_oid'), child_name=json_data.get('child_name'), parent_oid=json_data.get('parent_oid'), parent_name=json_data.get('parent_name'))
-                case "add_role_inducement_to_archetype":
-                    self.add_role_inducement_to_archetype(role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'), archetype_oid=json_data.get('archetype_oid'), archetype_name=json_data.get('archetype_name'))
-                case "set_system_configuration":
-                    self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
-                case "set_class_logger":
-                    self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
-                case "set_notification_configuration":
-                    self.set_notification_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
-                case "set_message_configuration":
-                    self.set_message_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
-                case _:
-                    self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
+            case "add_resource_inducement_to_role":
+                self.add_resource_inducement_to_role(resource_oid=json_data.get('resource_oid'), resource_name=json_data.get('resource_name'), role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'))
+            case "add_role_inducement_to_role":
+                self.add_role_inducement_to_role(child_oid=json_data.get('child_oid'), child_name=json_data.get('child_name'), parent_oid=json_data.get('parent_oid'), parent_name=json_data.get('parent_name'))
+            case "add_role_inducement_to_archetype":
+                self.add_role_inducement_to_archetype(role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'), archetype_oid=json_data.get('archetype_oid'), archetype_name=json_data.get('archetype_name'))
+            case "set_system_configuration":
+                self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
+            case "set_class_logger":
+                self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
+            case "set_notification_configuration":
+                self.set_notification_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
+            case "set_message_configuration":
+                self.set_message_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
+            case _:
+                self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
     def set_system_configuration(self, modification_type, path, value):
         self._logger.debug("set_system_configuration(modification_type={}, path={}, value={}", modification_type, path, value)
