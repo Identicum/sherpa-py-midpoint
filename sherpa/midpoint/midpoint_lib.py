@@ -337,6 +337,8 @@ class Midpoint:
                     self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
                 case "set_notification_configuration":
                     self.set_notification_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
+                case "set_message_configuration":
+                    self.set_message_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
                 case _:
                     self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
@@ -451,5 +453,10 @@ class Midpoint:
                 handler_id = handler.get('handler_id')
                 return
         self._logger.debug("handler_id doesnt exist: {}".format(handler_id))
+        self.set_system_configuration(modification_type, path, xml_data)
+        return
+
+    def set_message_configuration(self, modification_type, path, json):
+        xml_data = self.json_to_xml(json)
         self.set_system_configuration(modification_type, path, xml_data)
         return
