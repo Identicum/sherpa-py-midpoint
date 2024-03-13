@@ -460,3 +460,29 @@ class Midpoint:
         xml_data = self.json_to_xml(json)
         self.set_system_configuration(modification_type, path, xml_data)
         return
+
+    def wait_for_completed_task(self, iterations, interval, object_type="TaskType", object_oid=None, object_name=None):
+        self._logger.debug("Waiting task: {}".format(object_name))
+        self.wait_for_object(iterations=3, interval=30, object_type=object_type, object_oid=object_oid, object_name=object_name)
+        task_completed = False
+        for iteration in range(iterations):
+            object_task_string = self.get_object_by_name(object_type, object_name)
+            namespace = {'ns': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+            result_element = ElementTree.fromstring(object_task_string).find('.//ns:resultStatus', namespace).text
+            self._logger.debug("result_element: {}", result_element)
+            self._logger.debug("Iteration #: {}", iteration)
+            try:
+                if result_element == "success":
+                    task_completed = True
+                    self._logger.debug("Task is '{}'".format(result_element))
+                    break
+                elif result_element == "in_progress" :
+                    self._logger.debug("Task is '{}'".format(result_element))
+                else:
+                    self._logger.error("Unable to recognize task status")
+            except:
+                self._logger.debug("Exception while trying to find object_task_string: {}, object_oid: {}, object_name: {}", object_type, object_oid, object_name)
+            self._logger.trace("Waiting {} seconds for object_task_string: {}, object_oid: {}, object_name: {}", interval, object_type, object_oid, object_name)
+            time.sleep(interval)
+        if not task_completed:
+            raise Exception("Gave up trying to find object_task_string: {}, object_oid: {}, object_name: {}".format(object_type, object_oid, object_name))
