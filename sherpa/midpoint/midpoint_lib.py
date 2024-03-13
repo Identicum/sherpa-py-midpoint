@@ -47,13 +47,13 @@ class Midpoint:
         http.wait_for_endpoint(url, iterations, interval, logger, headers)
 
 
-    def _midpoint_call(self, method, endpoint, oid, payload):
+    def _midpoint_call(self, method, endpoint, oid, payload, content_type = 'application/xml'):
         url = self._baseurl + endpoint
         if method=="GET" or method=="PATCH" or method=="PUT":
             url = url + "/" + oid
         headers = {
             'Authorization': 'Basic {}'.format(self._credentials.decode()),
-            'Content-Type': 'application/xml'
+            'Content-Type': content_type
         }
         self._logger.debug("Calling URL: {} with method: {}, headers: {}", url, method, headers)
         self._logger.trace("payload: {}", payload)
