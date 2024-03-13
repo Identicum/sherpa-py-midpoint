@@ -339,6 +339,8 @@ class Midpoint:
                 self.set_notification_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
             case "set_message_configuration":
                 self.set_message_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), json=json_data.get('value'))
+            case "set_role_requestable":
+                self.set_role_requestable(role_name=json_data.get('role_name'), value=json_data.get('requestable'))
             case _:
                 self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
@@ -486,3 +488,39 @@ class Midpoint:
             time.sleep(interval)
         if not task_completed:
             raise Exception("Gave up trying to find object_task_string: {}, object_oid: {}, object_name: {}".format(object_type, object_oid, object_name))
+    
+    def parse_existing_roles(self, xml_content):
+        self._logger.debug("Parsing existing roles in midpoint configuration file.")
+        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+        root = ElementTree.fromstring(xml_content)
+        handlers = root.findall('c:notificationConfiguration/c:handler', namespaces=ns)
+        result = []
+        for handler in handlers:
+            handler_id = handler.get('id')
+            handler_name = handler.find('c:name', namespaces=ns).text
+            entry = {
+                "handler_id": handler_id,
+                "handler_name": handler_name
+            }
+            result.append(entry)
+        self._logger.debug("Existing handlers in notification configuration: {}".format(result))
+        return result
+
+    def set_role_requestable(self, role_name, value):
+        self.wait_for_completed_task(iterations=2, interval=30, object_name="AD_GROUP_import")
+        self._logger.debug("role_name in user configuration file: {}".format(role_name))
+        role_object = self.get_object_by_name("RoleType", role_name)
+        object_oid = self._get_oid_from_document(role_object)
+        endpoint = self._get_endpoint("roleType")
+        self._logger.debug("role oid: {}".format(object_oid))
+        json_data = """{{
+                    "objectModification": {{
+                        "itemDelta": {{
+                            "modificationType": "add",
+                            "path": "requestable",
+                            "value": {}
+                        }}
+                    }}
+                }}""".format(value)
+        response = self._midpoint_call("PATCH", endpoint, object_oid, json_data, content_type='application/json')
+        return response
