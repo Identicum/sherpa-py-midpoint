@@ -313,7 +313,7 @@ class Midpoint:
             self._properties.replace(self._temp_file_path)
             with open(self._temp_file_path) as f:
                 json_data = json.load(f)
-            self._logger.debug("JSON data: {}".format(json_data))
+            self._logger.trace("JSON data: {}".format(json_data))
             if isinstance(json_data, dict):
                 self._logger.trace("JSON is dictionary")
                 self.process_operation(json_data)
@@ -435,7 +435,7 @@ class Midpoint:
     
     def json_to_xml(self, json_data):
         xml_content = self.convert_dict(json_data)
-        self._logger.debug("xml_content: {}".format(xml_content))
+        self._logger.trace("xml_content: {}".format(xml_content))
         return xml_content
     
     #ToDo: Add support for modification_type "replace" in set_notification_configuration
