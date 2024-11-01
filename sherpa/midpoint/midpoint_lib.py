@@ -37,7 +37,7 @@ endpoints = {
 
 class Midpoint:
     def __init__(self, mp_baseurl, mp_username, mp_password, properties, logger=Logger("Midpoint"), temp_file_path="/tmp/midpoint_object", iterations=10, interval=10):
-        self.logger.debug("Midpoint lib version: " + version("sherpa-py-midpoint"))
+        logger.debug("Midpoint lib version: " + version("sherpa-py-midpoint"))
         self._baseurl = mp_baseurl
         mp_credentials = "{}:{}".format(mp_username, mp_password)
         self._credentials = base64.b64encode(mp_credentials.encode())
