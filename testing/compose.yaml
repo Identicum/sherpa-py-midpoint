@@ -1,0 +1,51 @@
+services:
+    db:
+        container_name: db
+        image: ghcr.io/identicum/postgres:15
+        pull_policy: always
+        restart: always
+        ports:
+            - 5432:5432
+        environment:
+            POSTGRES_PASSWORD: midpointpwd
+        volumes:
+            - ./postgres_initdb/:/docker-entrypoint-initdb.d/:ro
+    midpoint_presetup:
+        container_name: midpoint_presetup
+        image: ghcr.io/identicum/midpoint:4.8
+        pull_policy: always
+        environment:
+            REPO_URL: jdbc:postgresql://db:5432/midpointdb
+            REPO_USER: midpointusr
+            REPO_PASSWORD_FILE: /passwords/repo_database
+        volumes:
+            - ./passwords/:/passwords/:ro
+        command: "/usr/local/bin/initialize_repository.sh"
+        depends_on:
+            db:
+                condition: service_healthy
+    midpoint:
+        container_name: midpoint
+        image: ghcr.io/identicum/midpoint:4.8
+        pull_policy: always
+        ports:
+            - 8080:8080
+        environment:
+            REPO_URL: jdbc:postgresql://db:5432/midpointdb
+            REPO_USER: midpointusr
+            REPO_PASSWORD_FILE: /passwords/repo_database
+        volumes:
+            - ./passwords/:/passwords/:ro
+        depends_on:
+            midpoint_presetup:
+                condition: service_completed_successfully
+    midpoint_setup:
+        container_name: midpoint_setup
+        image: ghcr.io/identicum/sherpa-deploy:latest
+        pull_policy: always
+        volumes:
+            - ../:/usr/home/
+        command: "./testing/objects.py"
+        depends_on:
+            midpoint:
+                condition: service_healthy

@@ -1,0 +1,14 @@
+<archetype xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+           oid="00000000-0000-1de4-0011-000000000002">
+	<name>Contractor</name>
+	<archetypePolicy>
+		<display>
+			<label>Contractor</label>
+			<pluralLabel>Contractors</pluralLabel>
+			<icon>
+				<cssClass>fa fa-user</cssClass>
+				<color>#10ab24</color>
+			</icon>
+		</display>
+	</archetypePolicy>
+</archetype>
