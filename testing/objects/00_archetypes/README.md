@@ -1,3 +1,0 @@
-# Archetypes
-
-[OIDs](../README.md)
