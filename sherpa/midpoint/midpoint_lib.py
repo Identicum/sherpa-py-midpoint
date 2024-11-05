@@ -247,17 +247,21 @@ class Midpoint:
         response = self.patch_object(xml_data, endpoint, target_oid)
         return response
 
+
     def add_resource_inducement_to_role(self, resource_oid=None, resource_name=None, role_oid=None, role_name=None):
         response = self._add_inducement(inducement_type="ResourceType", inducement_oid=resource_oid, inducement_name=resource_name, target_type="RoleType", target_oid=role_oid, target_name=role_name)
         return response
+
 
     def add_role_inducement_to_role(self, child_oid=None, child_name=None, parent_oid=None, parent_name=None):
         response = self._add_inducement(inducement_type="RoleType", inducement_oid=child_oid, inducement_name=child_name, target_type="RoleType", target_oid=parent_oid, target_name=parent_name)
         return response
 
+
     def add_role_inducement_to_archetype(self, role_oid=None, role_name=None, archetype_oid=None, archetype_name=None):
         response = self._add_inducement(inducement_type="RoleType", inducement_oid=role_oid, inducement_name=role_name, target_type="ArchetypeType", target_oid=archetype_oid, target_name=archetype_name)
         return response
+
 
     def wait_for_object(self, iterations, interval, object_type, object_oid=None, object_name=None):
         object_exists = False
@@ -283,7 +287,8 @@ class Midpoint:
             time.sleep(interval)
         if not object_exists:
             raise Exception("Gave up trying to find object_type: {}, object_oid: {}, object_name: {}".format(object_type, object_oid, object_name))
-    
+
+
     def process_subfolders(self, subfolder_path):
         if not os.path.exists(subfolder_path):
             self._logger.error("Folder not found: {}.", subfolder_path)
@@ -293,6 +298,7 @@ class Midpoint:
             if object_type_folder.is_dir():
                 self.process_folder(object_type_folder.path)
 
+
     def process_folder(self, folder_path):
         self._logger.debug("Processing dir: {}.", folder_path)
         if not os.path.exists(folder_path):
@@ -301,6 +307,7 @@ class Midpoint:
         for file in sorted(os.scandir(folder_path), key=lambda path: path.name):
             if file.is_file():
                 self.process_file(file)
+
 
     def process_file(self, file):
         if not os.path.exists(file):
@@ -339,6 +346,7 @@ class Midpoint:
                 for operation in json_data:
                     self.process_operation(operation)
 
+
     def process_operation(self, json_data):
         self._logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
         match json_data["operation_type"]:
@@ -361,6 +369,7 @@ class Midpoint:
             case _:
                 self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
+
     def set_system_configuration(self, modification_type, path, value):
         self._logger.debug("set_system_configuration(modification_type={}, path={}, value={}", modification_type, path, value)
         if isinstance(value, dict):
@@ -379,7 +388,8 @@ class Midpoint:
         endpoint = self._get_endpoint("SystemConfigurationType")
         response = self.patch_object(xml_data, endpoint, "00000000-0000-0000-0000-000000000001")
         return response
-    
+
+
     def parse_class_logger(self, xml_content):
         self._logger.trace("Parsing existing classLoggers.")
         ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
@@ -400,10 +410,12 @@ class Midpoint:
         self._logger.trace("existing classLoggers: {}".format(result))
         return result
 
+
     def replace_class_logger(self, id, level):
         path = "c:logging/c:classLogger[{}]/level".format(id)
         self.set_system_configuration("REPLACE", path, level)
-        
+
+
     def add_class_logger(self, package, level):
         value = """
                 <c:level>{}</c:level>
@@ -411,6 +423,7 @@ class Midpoint:
         """.format(level, package)
         path = "c:logging/c:classLogger"
         self.set_system_configuration("ADD", path, value)
+
 
     def set_class_logger(self, package, level):
         system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
@@ -425,6 +438,7 @@ class Midpoint:
                 self.replace_class_logger(existing_logger_id, level)
                 return
         self.add_class_logger(package, level)
+
 
     def parse_notification_configuration(self, xml_content):
         self._logger.debug("Parsing existing handlers in notification configuration.")
@@ -443,6 +457,7 @@ class Midpoint:
         self._logger.debug("Existing handlers in notification configuration: {}".format(result))
         return result
 
+
     def convert_dict(self, obj, namespace_prefix='c'):
         elements = []
         for key, val in obj.items():
@@ -451,12 +466,14 @@ class Midpoint:
             else:
                 elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, val, namespace_prefix, key))
         return ''.join(elements)
-    
+
+
     def json_to_xml(self, json_data):
         xml_content = self.convert_dict(json_data)
         self._logger.trace("xml_content: {}".format(xml_content))
         return xml_content
-    
+
+
     #ToDo: Add support for modification_type "replace" in set_notification_configuration
     def set_notification_configuration(self, modification_type, path, json):
         notifier_name = json["name"]
@@ -475,10 +492,12 @@ class Midpoint:
         self.set_system_configuration(modification_type, path, xml_data)
         return
 
+
     def set_message_configuration(self, modification_type, path, json):
         xml_data = self.json_to_xml(json)
         self.set_system_configuration(modification_type, path, xml_data)
         return
+
 
     def wait_for_completed_task(self, iterations, interval, object_type="TaskType", object_oid=None, object_name=None):
         self._logger.debug("Waiting task: {}".format(object_name))
@@ -505,7 +524,8 @@ class Midpoint:
             time.sleep(interval)
         if not task_completed:
             raise Exception("Gave up trying to find object_task_string: {}, object_oid: {}, object_name: {}".format(object_type, object_oid, object_name))
-    
+
+
     def parse_existing_roles(self, xml_content):
         self._logger.debug("Parsing existing roles in midpoint configuration file.")
         ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
@@ -522,6 +542,7 @@ class Midpoint:
             result.append(entry)
         self._logger.debug("Existing handlers in notification configuration: {}".format(result))
         return result
+
 
     def set_role_requestable(self, role_name, value):
         self.wait_for_completed_task(iterations=2, interval=30, object_name="AD_GROUP_import")
