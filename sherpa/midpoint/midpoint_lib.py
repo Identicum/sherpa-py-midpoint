@@ -184,52 +184,35 @@ class Midpoint:
             return True
 
 
-    def _add_inducement(self, inducement_type, target_type, inducement_oid=None, inducement_name=None, target_oid=None, target_name=None):
-        self._logger.trace("_add_inducement(inducement_type={}, inducement_oid={}, inducement_name={}, target_type={}, target_oid={}, target_name={}", inducement_type, inducement_oid, inducement_name, target_type, target_oid, target_name)
-        target_object = {}
-        if target_oid is not None:
-            target_object = self.get_object(target_type, target_oid)
-            if target_object is None:
-                raise Exception("target_type: {}, target_oid: {} does not exist.".format(target_type, target_oid))
-        elif target_name is not None:
-            target_object = self.get_object_by_name(target_type, target_name)
-            if target_object is None:
-                raise Exception("target_type: {}, target_name: {} does not exist.".format(target_type, target_name))
-            target_oid = self._get_oid_from_document(target_object)
-        else:
-            raise Exception("Either target_oid or target_name must be specified.")
+    def _add_assignment_or_inducement(self, relationship_type, source_type, target_type, source_oid=None, source_name=None, target_oid=None, target_name=None):
+        self._logger.trace("_add_assignment_or_inducement(relationship_type={}, source_type={}, source_oid={}, source_name={}, target_type={}, target_oid={}, target_name={}", relationship_type, source_type, source_oid, source_name, target_type, target_oid, target_name)
 
-        self.wait_for_object(iterations=2, interval=30, object_type=inducement_type, object_oid=inducement_oid, object_name=inducement_name)
+        self.wait_for_object(iterations=2, interval=30, object_type=source_type, object_oid=source_oid, object_name=source_name)
         self.wait_for_object(iterations=2, interval=30, object_type=target_type, object_oid=target_oid, object_name=target_name)
 
-        inducement_object = {}
-        if inducement_oid is not None:
-            inducement_object = self.get_object(inducement_type, inducement_oid)
-            if inducement_object is None:
-                raise Exception("inducement_type: {}, inducement_oid: {} does not exist.".format(inducement_type, inducement_oid))
-        elif inducement_name is not None:
-            inducement_object = self.get_object_by_name(inducement_type, inducement_name)
-            if inducement_object is None:
-                raise Exception("inducement_type: {}, inducement_name: {} does not exist.".format(inducement_type, inducement_name))
-            inducement_oid = self._get_oid_from_document(inducement_object)
-        else:
-            raise Exception("Either inducement_oid or inducement_name must be specified.")
+        source_object = self.get_object_by_oid_or_name(source_type, source_oid, source_name)
+        if source_oid is None:
+            source_oid = self._get_oid_from_document(source_object)
+        target_object = self.get_object_by_oid_or_name(target_type, target_oid, target_name)
+        if target_oid is None:
+            target_oid = self._get_oid_from_document(target_object)
 
-        self._logger.debug("Checking if inducement already exists for target_object: {}, target_oid: {}, inducement_name: {}, inducement_oid: {}", target_name, target_oid, inducement_name, inducement_oid)
+        # TODO: verify
+        self._logger.debug("Checking if {} already exists from source_type: {}, source_oid: {} to target_type: {}, target_oid: {}.", relationship_type, source_type, source_oid, target_type, target_oid)
         target_object_normalized = target_object.decode() if type(target_object) is bytes else target_object
-        if inducement_oid in target_object_normalized:
-            self._logger.debug("Inducement already exists for target_object: {}, target_oid: {}, inducement_name: {}, inducement_oid: {}", target_name, target_oid, inducement_name, inducement_oid)
+        if source_oid in target_object_normalized:
+            self._logger.debug("Relationship ({}) already exists".format(relationship_type))
             return
 
-        self._logger.debug("Adding inducement type: {}, oid: {} to object type: {}, oid: {}", inducement_type, inducement_oid, target_type, target_oid)
-        if inducement_type=="ResourceType":
-            new_inducement = """<c:construction>
+        self._logger.debug("Adding {} source_type: {}, source_oid: {} to target_type: {}, target_oid: {}", relationship_type, source_type, source_oid, target_type, target_oid)
+        if source_type=="ResourceType":
+            new_relationship = """<c:construction>
                                     <c:resourceRef type="c:ResourceType" oid="{}" />
-                                </c:construction>""".format(inducement_oid)
-        elif inducement_type=="RoleType":
-            new_inducement = """<c:targetRef type="c:RoleType" oid="{}" />""".format(inducement_oid)
+                                </c:construction>""".format(source_oid)
+        elif source_type=="RoleType":
+            new_relationship = """<c:targetRef type="c:RoleType" oid="{}" />""".format(source_oid)
         else:
-            raise Exception("Unknown structure for inducement")
+            raise Exception("Unknown structure for {}".format(relationship_type))
 
         xml_data = """<objectModification
                     xmlns='http://midpoint.evolveum.com/xml/ns/public/common/api-types-3'
@@ -237,29 +220,34 @@ class Midpoint:
                     xmlns:t='http://prism.evolveum.com/xml/ns/public/types-3'>
                         <itemDelta>
                             <t:modificationType>add</t:modificationType>
-                            <t:path>c:inducement</t:path>
+                            <t:path>c:{}</t:path>
                             <t:value>
                                 {}
                             </t:value>
                         </itemDelta>
-                    </objectModification>""".format(new_inducement)
+                    </objectModification>""".format(relationship_type, new_relationship)
         endpoint = self._get_endpoint(target_type)
         response = self.patch_object(xml_data, endpoint, target_oid)
         return response
 
 
     def add_resource_inducement_to_role(self, resource_oid=None, resource_name=None, role_oid=None, role_name=None):
-        response = self._add_inducement(inducement_type="ResourceType", inducement_oid=resource_oid, inducement_name=resource_name, target_type="RoleType", target_oid=role_oid, target_name=role_name)
+        response = self._add_assignment_or_inducement("inducement", source_type="ResourceType", source_oid=resource_oid, source_name=resource_name, target_type="RoleType", target_oid=role_oid, target_name=role_name)
         return response
 
 
     def add_role_inducement_to_role(self, child_oid=None, child_name=None, parent_oid=None, parent_name=None):
-        response = self._add_inducement(inducement_type="RoleType", inducement_oid=child_oid, inducement_name=child_name, target_type="RoleType", target_oid=parent_oid, target_name=parent_name)
+        response = self._add_assignment_or_inducement("inducement", source_type="RoleType", source_oid=child_oid, source_name=child_name, target_type="RoleType", target_oid=parent_oid, target_name=parent_name)
         return response
 
 
     def add_role_inducement_to_archetype(self, role_oid=None, role_name=None, archetype_oid=None, archetype_name=None):
-        response = self._add_inducement(inducement_type="RoleType", inducement_oid=role_oid, inducement_name=role_name, target_type="ArchetypeType", target_oid=archetype_oid, target_name=archetype_name)
+        response = self._add_assignment_or_inducement("inducement", source_type="RoleType", source_oid=role_oid, source_name=role_name, target_type="ArchetypeType", target_oid=archetype_oid, target_name=archetype_name)
+        return response
+
+
+    def add_role_assignment_to_user(self, role_oid=None, role_name=None, user_oid=None, user_name=None):
+        response = self._add_assignment_or_inducement("assignment", source_type="RoleType", source_oid=role_oid, source_name=role_name, target_type="UserType", target_oid=user_oid, target_name=user_name)
         return response
 
 

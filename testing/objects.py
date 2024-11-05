@@ -23,7 +23,9 @@ def run(logger, properties):
 	mp_baseurl = "http://midpoint:8080/midpoint/ws/rest/"
 	midpoint = Midpoint(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Test5ecr3t", properties=properties, logger=logger, iterations=30, interval=30)
 	midpoint.process_subfolders("./testing/objects")
-	midpoint.run_task(task_name="USERS_recompute")
+	# midpoint.run_task(task_name="USERS_recompute")
+	midpoint.add_role_inducement_to_role(child_name="role01", parent_name="role02")
+	midpoint.add_role_assignment_to_user(role_name="role02", user_name="administrator")
 
 
 if __name__ == "__main__":

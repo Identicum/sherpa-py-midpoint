@@ -1,0 +1,7 @@
+<role oid="00000000-0000-1de4-0004-000000000002"
+	xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+	xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">
+	<name>role02</name>
+	<requestable>false</requestable>
+	<delegable>false</delegable>
+</role>
