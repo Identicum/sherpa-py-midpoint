@@ -49,7 +49,7 @@ class Midpoint:
         http.wait_for_endpoint(url, iterations, interval, logger, headers)
 
 
-    def _midpoint_call(self, method, endpoint, oid, payload, content_type = 'application/xml'):
+    def _midpoint_call(self, method, endpoint, oid, payload, content_type='application/xml'):
         url = self._baseurl + endpoint
         if method=="GET" or method=="PATCH" or method=="PUT":
             url = url + "/" + oid
@@ -121,6 +121,21 @@ class Midpoint:
         object_string = ElementTree.tostring(object, encoding="unicode")
         self._logger.trace("object_string: {}", object_string)
         return object_string
+
+
+    def get_object_by_oid_or_name(self, object_type, object_oid=None, object_name=None):
+        object = {}
+        if object_oid is not None:
+            object = self.get_object(object_type, object_oid)
+            if object is None:
+                raise Exception("object_type: {}, object_oid: {} does not exist.".format(object_type, object_oid))
+        elif object_name is not None:
+            object = self.get_object_by_name(object_type, object_name)
+            if object is None:
+                raise Exception("object_type: {}, object_name: {} does not exist.".format(object_type, object_name))
+        else:
+            raise Exception("Either object_oid or object_name must be specified.")
+        return object
 
 
     def get_object_oid(self, object_type, object_name):
@@ -526,3 +541,19 @@ class Midpoint:
                 }}""".format(value)
         response = self._midpoint_call("PATCH", endpoint, object_oid, json_data, content_type='application/json')
         return response
+
+
+    def resume_task(self, task_oid=None, task_name=None):
+        object_type = "TaskType"
+        task_object = self.get_object_by_oid_or_name(object_type, task_oid, task_name)
+        endpoint = self._get_endpoint(object_type) + "/" + self._get_oid_from_document(task_object) + "/resume"
+        response = self._midpoint_call("POST", endpoint, payload=None, oid=None)
+        self._logger.trace("response: {}", response)
+
+
+    def run_task(self, task_oid=None, task_name=None):
+        object_type = "TaskType"
+        task_object = self.get_object_by_oid_or_name(object_type, task_oid, task_name)
+        endpoint = self._get_endpoint(object_type) + "/" + self._get_oid_from_document(task_object) + "/run"
+        response = self._midpoint_call("POST", endpoint, payload=None, oid=None)
+        self._logger.trace("response: {}", response)
