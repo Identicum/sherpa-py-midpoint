@@ -413,6 +413,10 @@ class Midpoint:
         self.set_system_configuration("ADD", path, value)
 
 
+    def set_security_policy(self, policy_oid=None, policy_name=None):
+        self.set_system_configuration("REPLACE", "globalSecurityPolicyRef", {"oid" : policy_oid})
+
+
     def set_class_logger(self, package, level):
         system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
         existing_logger_id = None
