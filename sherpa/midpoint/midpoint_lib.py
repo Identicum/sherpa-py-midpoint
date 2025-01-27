@@ -17,6 +17,7 @@ from sherpa.utils.basics import Logger
 from xml.etree import ElementTree
 
 endpoints = {
+    "AccessCertificationDefinitionType": "accessCertificationDefinitions",
     "ArchetypeType": "archetypes",
     "ConnectorHostType": "connectorHosts",
     "ConnectorType": "connectors",
