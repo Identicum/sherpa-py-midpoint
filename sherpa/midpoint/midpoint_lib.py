@@ -23,6 +23,7 @@ endpoints = {
     "ConnectorType": "connectors",
     "FunctionLibraryType": "functionLibraries",
     "GenericObjectType": "genericObjects",
+    "ObjectCollectionType": "objectCollections",
     "ObjectTemplateType": "objectTemplates",
     "OrgType": "orgs",
     "ResourceType": "resources",
