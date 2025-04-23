@@ -10,6 +10,7 @@ services:
             POSTGRES_PASSWORD: midpointpwd
         volumes:
             - ./postgres_initdb/:/docker-entrypoint-initdb.d/:ro
+
     midpoint_presetup:
         container_name: midpoint_presetup
         image: ghcr.io/identicum/midpoint:4.8
@@ -24,6 +25,7 @@ services:
         depends_on:
             db:
                 condition: service_healthy
+
     midpoint:
         container_name: midpoint
         image: ghcr.io/identicum/midpoint:4.8
@@ -42,6 +44,7 @@ services:
         depends_on:
             midpoint_presetup:
                 condition: service_completed_successfully
+
     midpoint_setup:
         container_name: midpoint_setup
         image: ghcr.io/identicum/sherpa-deploy:latest
@@ -52,3 +55,13 @@ services:
         depends_on:
             midpoint:
                 condition: service_healthy
+
+    midpoint_postsetup:
+        container_name: midpoint_postsetup
+        image: ghcr.io/identicum/sherpa-deploy:latest
+        pull_policy: always
+        volumes:
+            - ../:/usr/home/
+        depends_on:
+            midpoint_setup:
+                condition: service_completed_successfully

@@ -296,10 +296,10 @@ class Midpoint:
             return
         for file in sorted(os.scandir(folder_path), key=lambda path: path.name):
             if file.is_file():
-                self.process_file(file)
+                self._process_file(file)
 
 
-    def process_file(self, file):
+    def _process_file(self, file):
         if not os.path.exists(file):
             self._logger.error("File not found: {}.", file)
             return
@@ -327,17 +327,16 @@ class Midpoint:
             self._properties.replace(self._temp_file_path)
             with open(self._temp_file_path) as f:
                 json_data = json.load(f)
-            self._logger.trace("JSON data: {}".format(json_data))
             if isinstance(json_data, dict):
-                self._logger.trace("JSON is dictionary")
-                self.process_operation(json_data)
+                self._logger.trace("Processing operation in JSON (dict): {}".format(json_data))
+                self._process_operation(json_data)
             if isinstance(json_data, list):
-                self._logger.trace("JSON is list")
+                self._logger.trace("Processing each operation in JSON (list): {}".format(json_data))
                 for operation in json_data:
-                    self.process_operation(operation)
+                    self._process_operation(operation)
 
 
-    def process_operation(self, json_data):
+    def _process_operation(self, json_data):
         self._logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
         match json_data["operation_type"]:
             case "add_resource_inducement_to_role":
@@ -360,6 +359,14 @@ class Midpoint:
                 self._logger.error("OperationType is unknown: {}.", json_data["operation_type"])
 
 
+    def get_system_configuration(self):
+        self._logger.debug("get_system_configuration()")
+        system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
+        if system_configuration_object is None:
+            raise Exception("SystemConfigurationType does not exist.")
+        return system_configuration_object
+
+
     def set_system_configuration(self, modification_type, path, value):
         self._logger.debug("set_system_configuration(modification_type={}, path={}, value={}", modification_type, path, value)
         if isinstance(value, dict):
@@ -375,13 +382,14 @@ class Midpoint:
                         <t:value>{}</t:value>
                     </itemDelta>
                 </objectModification>""".format(modification_type, path, value)
+        self._logger.trace("Object modification: {}", xml_data)
         endpoint = self._get_endpoint("SystemConfigurationType")
         response = self.patch_object(xml_data, endpoint, "00000000-0000-0000-0000-000000000001")
         return response
 
 
-    def parse_class_logger(self, xml_content):
-        self._logger.trace("Parsing existing classLoggers.")
+    def _get_class_loggers(self, xml_content):
+        self._logger.trace("Getting existing classLoggers.")
         ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
         root = ElementTree.fromstring(xml_content)
         class_loggers = root.findall('c:logging/c:classLogger', namespaces=ns)
@@ -420,9 +428,8 @@ class Midpoint:
 
 
     def set_class_logger(self, package, level):
-        system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
         existing_logger_id = None
-        logger_entries = self.parse_class_logger(system_configuration_object)
+        logger_entries = self._get_class_loggers(self.get_system_configuration())
         self._logger.trace("Existing logger entries: {}", logger_entries)
         for logger_entry in logger_entries:
             self._logger.trace("Checking if logger entry already exist: {}", logger_entry)
@@ -434,8 +441,8 @@ class Midpoint:
         self.add_class_logger(package, level)
 
 
-    def parse_notification_configuration(self, xml_content):
-        self._logger.debug("Parsing existing handlers in notification configuration.")
+    def _get_notification_configuration_handlers(self, xml_content):
+        self._logger.debug("Getting existing handlers in notification configuration.")
         ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
         root = ElementTree.fromstring(xml_content)
         handlers = root.findall('c:notificationConfiguration/c:handler', namespaces=ns)
@@ -452,18 +459,18 @@ class Midpoint:
         return result
 
 
-    def convert_dict(self, obj, namespace_prefix='c'):
+    def _convert_dict(self, obj, namespace_prefix='c'):
         elements = []
         for key, val in obj.items():
             if isinstance(val, dict):
-                elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, self.convert_dict(val), namespace_prefix, key))
+                elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, self._convert_dict(val), namespace_prefix, key))
             else:
                 elements.append('<{}:{}>{}</{}:{}>'.format(namespace_prefix, key, val, namespace_prefix, key))
         return ''.join(elements)
 
 
     def json_to_xml(self, json_data):
-        xml_content = self.convert_dict(json_data)
+        xml_content = self._convert_dict(json_data)
         self._logger.trace("xml_content: {}".format(xml_content))
         return xml_content
 
@@ -473,8 +480,7 @@ class Midpoint:
         notifier_name = json["name"]
         self._logger.debug("notifier_name in user configuration file: {}".format(notifier_name))
         xml_data = self.json_to_xml(json)
-        system_configuration_object = self.get_object("SystemConfigurationType", "00000000-0000-0000-0000-000000000001")
-        handler_entries = self.parse_notification_configuration(system_configuration_object)
+        handler_entries = self._get_notification_configuration_handlers(self.get_system_configuration())
         self._logger.debug("Existing notification handlers in xml: {}".format(handler_entries))
         handler_id = None
         for handler in handler_entries:
@@ -518,24 +524,6 @@ class Midpoint:
             time.sleep(interval)
         if not task_completed:
             raise Exception("Gave up trying to find object_task_string: {}, object_oid: {}, object_name: {}".format(object_type, object_oid, object_name))
-
-
-    def parse_existing_roles(self, xml_content):
-        self._logger.debug("Parsing existing roles in midpoint configuration file.")
-        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
-        root = ElementTree.fromstring(xml_content)
-        handlers = root.findall('c:notificationConfiguration/c:handler', namespaces=ns)
-        result = []
-        for handler in handlers:
-            handler_id = handler.get('id')
-            handler_name = handler.find('c:name', namespaces=ns).text
-            entry = {
-                "handler_id": handler_id,
-                "handler_name": handler_name
-            }
-            result.append(entry)
-        self._logger.debug("Existing handlers in notification configuration: {}".format(result))
-        return result
 
 
     def set_role_requestable(self, role_name, value):

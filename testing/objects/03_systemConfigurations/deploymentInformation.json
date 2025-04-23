@@ -1,0 +1,6 @@
+[{
+    "operation_type":"set_system_configuration",
+    "modification_type":"replace",
+    "path":"c:deploymentInformation/c:name",
+    "value":"Identicum"
+}]
