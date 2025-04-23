@@ -1,5 +1,5 @@
 # sherpa-py-midpoint is available under the MIT License. https://github.com/Identicum/sherpa-py-midpoint/
-# Copyright (c) 2024, Identicum - https://identicum.com/
+# Copyright (c) 2025, Identicum - https://identicum.com/
 #
 # Author: Gustavo J Gallardo - ggallard@identicum.com
 #
@@ -457,6 +457,21 @@ class Midpoint:
             result.append(entry)
         self._logger.debug("Existing handlers in notification configuration: {}".format(result))
         return result
+
+
+    def delete_object_collection_view(self, identifier):
+        self._logger.debug("Deleting object collection view '{}'.".format(identifier))
+        root = ElementTree.fromstring(self.get_system_configuration())
+        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+        for views_parent in root.findall('c:adminGuiConfiguration/c:objectCollectionViews', namespaces=ns):
+            for view_element in views_parent.findall('c:objectCollectionView', namespaces=ns):
+                oid = view_element.find('c:identifier', namespaces=ns)
+                self._logger.trace("Checking objectCollectionView: {}.".format(oid.text))
+                if oid.text == identifier:
+                    self._logger.debug("Found matching object collection view with identifier '{}'.", identifier)
+                    views_parent.remove(view_element)
+            self._logger.trace("New views_parent: {}", ElementTree.tostring(views_parent, encoding='unicode'))
+            self.set_system_configuration("REPLACE", 'c:adminGuiConfiguration', ElementTree.tostring(views_parent, encoding='unicode'))
 
 
     def _convert_dict(self, obj, namespace_prefix='c'):
