@@ -29,6 +29,7 @@ def run(logger, properties):
 	midpoint.add_role_assignment_to_user(role_name="role02", user_name="administrator")
 	midpoint.set_security_policy(policy_oid="00000000-0000-1de4-0012-000000000002")
 	midpoint.delete_object_collection_view("person-view")
+	midpoint.delete_homepage_widget("profileWidget")	
 
 	# midpoint.process_folder("./testing/test")
 

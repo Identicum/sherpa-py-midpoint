@@ -459,23 +459,33 @@ class Midpoint:
         return result
 
 
+    def _delete_xml_element(self, xml_content, parent_path, child_name, child_attribute_name, child_attribute_value):
+        self._logger.debug("Deleting '{}' from '{}' where key '{}' has value '{}'.".format(child_name, parent_path, child_attribute_name, child_attribute_value))
+        root = ElementTree.fromstring(xml_content)
+        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+        remaining_childs = []
+        for parent in root.findall(parent_path, namespaces=ns):
+            for child_element in parent.findall(child_name, namespaces=ns):
+                oid = child_element.find(child_attribute_name, namespaces=ns)
+                self._logger.trace("Checking {} with {}={}.", child_name, child_attribute_name, oid.text)
+                if oid.text == child_attribute_value:
+                    self._logger.debug("Found matching {} with {}={}.", child_name, child_attribute_name, child_attribute_value)
+                else:
+                    self._logger.debug("Keeping {} with {}={}.", child_name, child_attribute_name, child_attribute_value)
+                    remaining_childs.append(child_element)
+            remaining_childs_str = "\n".join([ElementTree.tostring(e, encoding='unicode') for e in remaining_childs])
+            self._logger.trace("New list of childs: {}", remaining_childs_str)
+            self.set_system_configuration("REPLACE", parent_path, remaining_childs_str)
+
+
     def delete_object_collection_view(self, identifier):
         self._logger.debug("Deleting object collection view '{}'.".format(identifier))
-        root = ElementTree.fromstring(self.get_system_configuration())
-        ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
-        remaining_views = []
-        for views_parent in root.findall('c:adminGuiConfiguration/c:objectCollectionViews', namespaces=ns):
-            for view_element in views_parent.findall('c:objectCollectionView', namespaces=ns):
-                oid = view_element.find('c:identifier', namespaces=ns)
-                self._logger.trace("Checking objectCollectionView: {}.".format(oid.text))
-                if oid.text == identifier:
-                    self._logger.debug("Found matching object collection view with identifier '{}'.", identifier)
-                else:
-                    self._logger.debug("Keeping object collection view with identifier '{}'.", oid.text)
-                    remaining_views.append(view_element)
-            remaining_views_str = "\n".join([ElementTree.tostring(e, encoding='unicode') for e in remaining_views])
-            self._logger.trace("New list of views: {}", remaining_views_str)
-            self.set_system_configuration("REPLACE", 'c:adminGuiConfiguration/c:objectCollectionViews', remaining_views_str)
+        self._delete_xml_element(xml_content=self.get_system_configuration(), parent_path='c:adminGuiConfiguration/c:objectCollectionViews', child_name='c:objectCollectionView', child_attribute_name='c:identifier', child_attribute_value=identifier)
+
+
+    def delete_homepage_widget(self, identifier):
+        self._logger.debug("Deleting homePage widget '{}'.".format(identifier))
+        self._delete_xml_element(xml_content=self.get_system_configuration(), parent_path='c:adminGuiConfiguration/c:homePage', child_name='c:widget', child_attribute_name='c:identifier', child_attribute_value=identifier)
 
 
     def _convert_dict(self, obj, namespace_prefix='c'):
