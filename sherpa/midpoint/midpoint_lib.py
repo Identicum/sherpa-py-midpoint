@@ -463,15 +463,19 @@ class Midpoint:
         self._logger.debug("Deleting object collection view '{}'.".format(identifier))
         root = ElementTree.fromstring(self.get_system_configuration())
         ns = {'c': 'http://midpoint.evolveum.com/xml/ns/public/common/common-3'}
+        remaining_views = []
         for views_parent in root.findall('c:adminGuiConfiguration/c:objectCollectionViews', namespaces=ns):
             for view_element in views_parent.findall('c:objectCollectionView', namespaces=ns):
                 oid = view_element.find('c:identifier', namespaces=ns)
                 self._logger.trace("Checking objectCollectionView: {}.".format(oid.text))
                 if oid.text == identifier:
                     self._logger.debug("Found matching object collection view with identifier '{}'.", identifier)
-                    views_parent.remove(view_element)
-            self._logger.trace("New views_parent: {}", ElementTree.tostring(views_parent, encoding='unicode'))
-            self.set_system_configuration("REPLACE", 'c:adminGuiConfiguration', ElementTree.tostring(views_parent, encoding='unicode'))
+                else:
+                    self._logger.debug("Keeping object collection view with identifier '{}'.", oid.text)
+                    remaining_views.append(view_element)
+            remaining_views_str = "\n".join([ElementTree.tostring(e, encoding='unicode') for e in remaining_views])
+            self._logger.trace("New list of views: {}", remaining_views_str)
+            self.set_system_configuration("REPLACE", 'c:adminGuiConfiguration/c:objectCollectionViews', remaining_views_str)
 
 
     def _convert_dict(self, obj, namespace_prefix='c'):
