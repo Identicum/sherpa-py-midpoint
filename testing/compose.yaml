@@ -1,7 +1,7 @@
 services:
     db:
         container_name: db
-        image: ghcr.io/identicum/postgres:15
+        image: ghcr.io/identicum/postgres:16
         pull_policy: always
         restart: always
         ports:
@@ -13,7 +13,7 @@ services:
 
     midpoint_presetup:
         container_name: midpoint_presetup
-        image: ghcr.io/identicum/midpoint:4.8
+        image: ghcr.io/identicum/midpoint:4.10
         pull_policy: always
         environment:
             REPO_URL: jdbc:postgresql://db:5432/midpointdb
@@ -28,7 +28,7 @@ services:
 
     midpoint:
         container_name: midpoint
-        image: ghcr.io/identicum/midpoint:4.8
+        image: ghcr.io/identicum/midpoint:4.10
         pull_policy: always
         ports:
             - 8080:8080
