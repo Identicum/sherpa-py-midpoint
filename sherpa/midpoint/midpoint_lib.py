@@ -21,6 +21,8 @@ endpoints = {
     "ArchetypeType": "archetypes",
     "ConnectorHostType": "connectorHosts",
     "ConnectorType": "connectors",
+    "DashboardType": "dashboards",
+    "FormType": "forms",
     "FunctionLibraryType": "functionLibraries",
     "GenericObjectType": "genericObjects",
     "ObjectCollectionType": "objectCollections",
