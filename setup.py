@@ -8,7 +8,7 @@ from setuptools import setup
 
 setup(
     name='sherpa-py-midpoint',
-    version='1.1.0-20260311',
+    version='1.1.0-20260312',
     description='Python utilities for Midpoint',
     url='git@github.com:Identicum/sherpa-py-midpoint.git',
     author='Identicum',

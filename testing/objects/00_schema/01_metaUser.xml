@@ -1,0 +1,45 @@
+<schema oid="00000000-0000-1de4-0017-000000000001"
+        xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3">
+    <name>Sherpa - metaUser</name>
+    <definition>
+        <xsd:schema elementFormDefault="qualified"
+                    targetNamespace="http://identicum.com/xml/ns/metaUser"
+                    xmlns:a="http://prism.evolveum.com/xml/ns/public/annotation-3"
+                    xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+                    xmlns:tns="http://identicum.com/xml/ns/metaUser"
+                    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+            <xsd:import namespace="http://prism.evolveum.com/xml/ns/public/annotation-3"/>
+            <xsd:annotation>
+                <xsd:appinfo>
+                    <a:defaultPrefix>meta</a:defaultPrefix>
+                </xsd:appinfo>
+            </xsd:annotation>
+            <xsd:complexType name="UserExtensionType">
+                <xsd:annotation>
+                    <xsd:appinfo>
+                        <a:extension  ref="c:UserType"/>
+                        <a:displayName>Sherpa User</a:displayName>
+                    </xsd:appinfo>
+                </xsd:annotation>
+                <xsd:sequence>
+                    <xsd:element name="metaPersonalEmail" type="xsd:string" minOccurs="0" maxOccurs="1">
+                        <xsd:annotation>
+                            <xsd:appinfo>
+                                <a:displayName>Personal Email</a:displayName>
+                                <a:indexed>true</a:indexed>
+                            </xsd:appinfo>
+                        </xsd:annotation>
+                    </xsd:element>
+                    <xsd:element name="metaIDNumber" type="xsd:string" minOccurs="0" maxOccurs="1">
+                        <xsd:annotation>
+                            <xsd:appinfo>
+                                <a:displayName>ID number</a:displayName>
+                                <a:indexed>true</a:indexed>
+                            </xsd:appinfo>
+                        </xsd:annotation>
+                    </xsd:element>
+                </xsd:sequence>
+            </xsd:complexType>
+        </xsd:schema>
+    </definition>
+</schema>

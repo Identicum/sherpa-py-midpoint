@@ -1,0 +1,38 @@
+<form oid="00000000-0000-1de4-0015-000000000001"
+      xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:t="http://prism.evolveum.com/xml/ns/public/types-3">
+    <name>Sherpa - Basic user form</name>
+    <description>Basic form for Users.</description>
+    <formDefinition>
+        <display>
+            <label>Basic user information</label>
+        </display>
+        <formItems list="true">
+            <formField>
+                <binding>
+                    <c:path>name</c:path>
+                </binding>
+                <display>
+                    <label>Username</label>
+                </display>
+            </formField>
+            <formField>
+                <binding>
+                    <c:path>givenName</c:path>
+                </binding>
+                <display>
+                    <label>First Name</label>
+                </display>
+            </formField>
+            <formField>
+                <binding>
+                    <c:path>familyName</c:path>
+                </binding>
+                <display>
+                    <label>Last Name</label>
+                </display>
+            </formField>
+        </formItems>
+    </formDefinition>
+</form>

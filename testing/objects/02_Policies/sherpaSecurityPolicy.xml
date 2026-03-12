@@ -2,7 +2,7 @@
                 xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
                 xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
                 xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3">
-	<name>Sherpa Security Policy</name>
+	<name>Sherpa - Security Policy</name>
 	<credentials>
 		<password>
 			<minOccurs>0</minOccurs>

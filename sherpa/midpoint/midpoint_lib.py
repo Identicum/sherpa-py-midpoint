@@ -1,5 +1,5 @@
 # sherpa-py-midpoint is available under the MIT License. https://github.com/Identicum/sherpa-py-midpoint/
-# Copyright (c) 2025, Identicum - https://identicum.com/
+# Copyright (c) 2026, Identicum - https://identicum.com/
 #
 # Author: Gustavo J Gallardo - ggallard@identicum.com
 #
@@ -30,6 +30,7 @@ endpoints = {
     "OrgType": "orgs",
     "ResourceType": "resources",
     "RoleType": "roles",
+    "SchemaType": "schemas",
     "SecurityPolicyType": "securityPolicies",
     "ShadowType": "shadows",
     "SystemConfigurationType": "systemConfigurations",

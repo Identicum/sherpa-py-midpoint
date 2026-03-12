@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objectCollection oid="00000000-0000-1de4-0013-000000000003"
+                  xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3">
+    <name>Sherpa - Suppliers</name>
+    <documentation>All supplier accounts.</documentation>
+    <type>UserType</type>
+    <baseCollection>
+        <collectionRef oid="00000000-0000-1de4-0011-000000000003" type="ArchetypeType" />
+    </baseCollection>
+</objectCollection>

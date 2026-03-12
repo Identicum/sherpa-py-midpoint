@@ -1,0 +1,15 @@
+<archetype oid="00000000-0000-1de4-0011-000000000002"
+           xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3">
+    <name>Sherpa - Contractor</name>
+    <identifier>contractor</identifier>
+    <archetypePolicy>
+        <display>
+            <label>Contractor</label>
+            <pluralLabel>Contractors</pluralLabel>
+            <icon>
+                <cssClass>fa fa-user</cssClass>
+                <color>#10ab24</color>
+            </icon>
+        </display>
+    </archetypePolicy>
+</archetype>
