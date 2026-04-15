@@ -1,0 +1,16 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'sherpa/**'
+      - 'setup.py'
+  workflow_dispatch:
+
+jobs:
+  release:
+    uses: Identicum/github-actions/.github/workflows/python-library-release.yml@main
+    permissions:
+      contents: write
