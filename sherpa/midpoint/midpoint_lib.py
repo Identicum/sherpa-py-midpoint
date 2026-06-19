@@ -28,6 +28,7 @@ endpoints = {
     "ObjectCollectionType": "objectCollections",
     "ObjectTemplateType": "objectTemplates",
     "OrgType": "orgs",
+    "ReportType": "reports",
     "ResourceType": "resources",
     "RoleType": "roles",
     "SchemaType": "schemas",
