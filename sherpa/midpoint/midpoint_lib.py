@@ -80,152 +80,38 @@ class MidpointClient:
         raise AttributeError("Can't find REST type for class " + object_type)
 
 
-    def _http_get(self, path: str, params: dict = None) -> dict:
+    def _http_get(self, path: str, params: dict = None, expected_status: list[int] = [200]) -> dict:
         url = self.base_url + path
         self.logger.debug(f"GET {url} params={params}")
         resp = self.session.get(url, params=params, timeout=self.timeout)
         self.logger.trace(f"GET {url} -> status={resp.status_code} body={resp.text}")
-        if resp.status_code not in [200]:
+        if resp.status_code not in expected_status:
             validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
         return resp.json()
 
 
-    def _http_patch(self, path: str, body: dict = None) -> dict:
+    def _http_patch(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
         url = self.base_url + path
         self.logger.debug(f"PATCH {url} body={body}")
         resp = self.session.patch(url, json=body, timeout=self.timeout)
         self.logger.trace(f"PATCH {url} -> status={resp.status_code} body={resp.text}")
-        if resp.status_code not in [200, 201, 202, 204]:
+        if resp.status_code not in expected_status:
             validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
         if not resp.text:
             return {}
         return resp.json()
 
 
-    def _http_post(self, path: str, body: dict = None) -> dict:
+    def _http_post(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
         url = self.base_url + path
         self.logger.debug(f"POST {url} body={body}")
         resp = self.session.post(url, json=body, timeout=self.timeout)
         self.logger.trace(f"POST {url} -> status={resp.status_code} body={resp.text}")
-        if resp.status_code not in [200, 201, 202, 204]:
+        if resp.status_code not in expected_status:
             validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
         if not resp.text:
             return {}
         return resp.json()
-
-
-    def search_objects(self, object_type: str, query_payload: dict) -> list[dict]:
-        self.logger.debug(f"Starting: object_type={object_type}, query_payload={query_payload}")
-        json_resp = self._http_post(path=self._get_endpoint(object_type) + "/search", body=query_payload)
-        objects = json_resp.get("object", {}).get("object", [])
-        self.logger.trace(f"objects: {objects}")
-        if isinstance(objects, dict):
-            objects = [objects]
-        if not objects:
-            self.logger.info(f"Object not found: type={object_type}, query_payload={query_payload}")
-            return []
-        self.logger.trace(f"Returning {len(objects)} objects: {objects}")
-        return objects
-
-
-    def search_object_by_name(self, object_type: str, object_name: str) -> dict:
-        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
-        query_payload = {"query": {"filter": {"equal": {"path": "name", "value": object_name}}}}
-        objects = self.search_objects(object_type, query_payload)
-        self.logger.trace(f"objects: {objects}")
-        if not objects:
-            self.logger.info(f"Object not found: type={object_type}, name={object_name}")
-            return {}
-        if len(objects) > 1:
-            raise MidpointError(f"Multiple objects found for type={object_type}, name={object_name}")
-        self.logger.trace(f"objects[0]: {objects[0]}")
-        return objects[0]
-
-
-    def get_object(self, object_type: str, object_oid: str) -> dict:
-        self.logger.debug(f"Starting: object_type={object_type}, object_oid={object_oid}")
-        json_resp = self._http_get(path=self._get_endpoint(object_type) + "/" + object_oid)
-        obj = next(iter(json_resp.values()), None)
-        self.logger.trace(f"obj: {obj}")
-        if not obj:
-            self.logger.info(f"Object not found: type={object_type}, name={object_oid}")
-            return None
-        return obj
-
-
-    def get_objects(self, object_type: str) -> list[dict]:
-        self.logger.debug(f"Starting: object_type={object_type}")
-        json_resp = self._http_get(path=self._get_endpoint(object_type))
-        objects = json_resp.get("object", {}).get("object", [])
-        self.logger.trace(f"objects: {objects}")
-        if isinstance(objects, dict):
-            objects = [objects]
-
-
-    def get_object_oid(self, object_type: str, object_name: str) -> str:
-        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
-        object = self.search_object_by_name(object_type, object_name)
-        if "oid" in object:
-            return object["oid"]
-        else:
-            validators.raise_and_log(self.logger, MidpointError, f"object does not contain oid: {object}")
-
-
-    def get_requestable_roles(self) -> list[dict]:
-        self.logger.debug(f"Starting")
-        query_payload = {
-            "query": {
-                "filter": {
-                    "equal": {
-                        "path": "requestable",
-                        "value": True
-                    }
-                }
-            }
-        }
-        return self.search_objects("RoleType", query_payload)
-
-
-    def request_role_assignment(self, assignee_type: str, assignee_oid: str, role_oid: str) -> dict:
-        self.logger.debug(f"Starting: assignee_type={assignee_type}, assignee_oid={assignee_oid}, role_oid={role_oid}")
-        request_body = {
-            "objectModification": {
-                "itemDelta": [
-                    {
-                        "modificationType": "add",
-                        "path": "assignment",
-                        "value": [
-                            {
-                                "targetRef": {
-                                    "oid": role_oid,
-                                    "type": "c:RoleType",
-                                    "relation": "org:default",
-                                }
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body)
-        self.logger.debug(f"json_resp={json_resp}")
-        return {"role_name": "TODO", "status": "success", "message": "Role requested"}
-
-
-    def get_work_items(self, assignee_oid: str) -> list[dict]:
-        self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
-        # ToDo: filter by assignee
-        query_payload = {
-            "query": {
-                "filter": {
-                    "equal": {
-                        "path": "state",
-                        "value": "open"
-                    }
-                }
-            }
-        }
-        return self.search_objects("CaseType", query_payload)
 
 
     def _extract_display_name(self, ref_or_poly) -> str:
@@ -243,6 +129,151 @@ class MidpointClient:
                 or ""
             )
         return ""
+
+
+    def _normalize_object(self, raw_object: dict) -> dict:
+        normalized_object = {}
+        object_type = ""
+
+        if "@type" in raw_object:
+            object_type = raw_object["@type"].removeprefix("c:").removesuffix("Type")
+            normalized_object["object_type"]=object_type
+
+        for attr in ["oid", "name", "description"]:
+            if attr in raw_object:
+                normalized_object[attr]=raw_object[attr]
+
+        match object_type:
+            case "Role":
+                for attr in ["requestable"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+            case "User":
+                for attr in ["givenName", "familyName"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+                role_assigment = []
+                if "assignment" in raw_object:
+                    assignment = raw_object["assignment"]
+                    if isinstance(assignment, dict):
+                        assignment = [assignment]
+                    for assignment_instance in assignment:
+                        role_assignment_instance = {}
+                        targetRef = assignment_instance["targetRef"]
+                        membership_type = targetRef["type"].removeprefix("c:")
+                        membership_activation = assignment_instance["activation"]
+                        membership_status = membership_activation["effectiveStatus"]
+                        if membership_type == "RoleType" and membership_status == "enabled":
+                            role_assignment_instance["type"] = membership_type
+                            role_oid = targetRef["oid"]
+                            role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
+                            role_assignment_instance["oid"] = role_oid
+                            role_assignment_instance["relation"] = targetRef["relation"]
+                            role_assignment_instance["name"] = role_object["name"]
+                            role_assigment.append(role_assignment_instance)
+                normalized_object["role_assigment"] = role_assigment
+                role_membership = []
+                if "roleMembershipRef" in raw_object:
+                    roleMembershipRef = raw_object["roleMembershipRef"]
+                    if isinstance(roleMembershipRef, dict):
+                        roleMembershipRef = [roleMembershipRef]
+                    for roleMembershipRef_instance in roleMembershipRef:
+                        role_membership_instance = {}
+                        membership_type = roleMembershipRef_instance["type"].removeprefix("c:")
+                        if membership_type == "RoleType":
+                            role_membership_instance["type"] = membership_type
+                            role_oid = roleMembershipRef_instance["oid"]
+                            role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
+                            role_membership_instance["oid"] = role_oid
+                            role_membership_instance["relation"] = roleMembershipRef_instance["relation"]
+                            role_membership_instance["name"] = role_object["name"]
+                            role_membership.append(role_membership_instance)
+                normalized_object["role_membership"] = role_membership
+        return normalized_object
+
+
+    def _normalize_objects(self, raw_objects: list[dict]) -> list[dict]:
+        self.logger.debug(f"Processing {len(raw_objects)} objects")
+        normalized_objects = []
+        for raw_object in raw_objects:
+            normalized_objects.append(self._normalize_object(raw_object))
+        return normalized_objects
+
+
+    def _search_objects(self, object_type: str, query_payload: dict) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}, query_payload={query_payload}")
+        json_resp = self._http_post(path=self._get_endpoint(object_type) + "/search", body=query_payload)
+        self.logger.trace(f"json_resp: {json_resp}")
+        objects = json_resp.get("object", {}).get("object", [])
+        if isinstance(objects, dict):
+            objects = [objects]
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, query_payload={query_payload}")
+            return []
+        self.logger.trace(f"Returning {len(objects)} objects: {objects}")
+        return objects
+
+
+    def _search_object_by_name(self, object_type: str, object_name: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        query_payload = {"query": {"filter": {"equal": {"path": "name", "value": object_name}}}}
+        objects = self._search_objects(object_type, query_payload)
+        self.logger.trace(f"objects: {objects}")
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, name={object_name}")
+            return {}
+        if len(objects) > 1:
+            raise MidpointError(f"Multiple objects found for type={object_type}, name={object_name}")
+        self.logger.trace(f"objects[0]: {objects[0]}")
+        return objects[0]
+
+
+    def _get_object(self, object_type: str, object_oid: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_oid={object_oid}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type) + "/" + object_oid)
+        obj = next(iter(json_resp.values()), None)
+        self.logger.trace(f"obj: {obj}")
+        if not obj:
+            self.logger.info(f"Object not found: type={object_type}, name={object_oid}")
+            return None
+        return obj
+
+
+    def _get_objects(self, object_type: str) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type))
+        objects = json_resp.get("object", {}).get("object", [])
+        self.logger.trace(f"objects: {objects}")
+        if isinstance(objects, dict):
+            objects = [objects]
+
+
+    # ###############################################################################
+    # General
+
+    def get_object_oid(self, object_type: str, object_name: str) -> str:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        object = self._search_object_by_name(object_type, object_name)
+        if "oid" in object:
+            return object["oid"]
+        else:
+            validators.raise_and_log(self.logger, MidpointError, f"object does not contain oid: {object}")
+
+
+    # ###############################################################################
+    # Case
+
+    def get_open_work_items(self, assignee_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
+        # ToDo: filter by assignee
+        query_payload = {
+            "query": {
+                "filter": {
+                    "text": f"workItem/assigneeRef matches (oid = \"{assignee_oid}\") and state = \"open\""
+                }
+            }
+        }
+        return self.search_objects("CaseType", query_payload)
 
 
     def _parse_work_item(self, case: dict, item: dict) -> dict:
@@ -342,6 +373,72 @@ class MidpointClient:
         """
         self.logger.debug("Starting")
         return self._decide_work_item(case_oid, item_id, "reject")
+
+
+    # ###############################################################################
+    # Role
+
+    def get_requestable_roles(self, user_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting")
+        query_payload = {
+            "query": {
+                "filter": { "text": "requestable = true" }
+            }
+        }
+        roles = self._search_objects(object_type="RoleType", query_payload=query_payload)
+        returned_roles = []
+        normalized_user = self.get_user(oid=user_oid)
+        if "role_membership" in normalized_user:
+            role_membership = normalized_user["role_membership"]
+            
+        return self._normalize_objects(roles)
+
+
+    def request_role_assignment(self, assignee_type: str, assignee_oid: str, role_oid: str) -> dict:
+        self.logger.debug(f"Starting: assignee_type={assignee_type}, assignee_oid={assignee_oid}, role_oid={role_oid}")
+        request_body = {
+            "objectModification": {
+                "itemDelta": [
+                    {
+                        "modificationType": "add",
+                        "path": "assignment",
+                        "value": [
+                            {
+                                "targetRef": {
+                                    "oid": role_oid,
+                                    "type": "c:RoleType",
+                                    "relation": "org:default",
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body)
+        self.logger.debug(f"json_resp={json_resp}")
+        return {"role_name": "TODO", "status": "success", "message": "Role requested"}
+
+
+    # ###############################################################################
+    # User
+
+    def get_user(self, oid: str = None, name: str = None) -> dict:
+        object_type = "UserType"
+        self.logger.debug(f"Starting: oid={oid}, name={name}")
+        object = {}
+        if oid is not None:
+            object = self._get_object(object_type=object_type, object_oid=oid)
+        elif name is not None:
+            object = self._search_object_by_name(object_type=object_type, object_name=name)
+        else:
+            raise Exception("Either oid or name must be specified.")
+        self.logger.trace("object: {}", object)
+        if "@type" not in object:
+            object["@type"] = f"c:{object_type}"
+        return self._normalize_object(object)
+
+
 
 
 class Midpoint:

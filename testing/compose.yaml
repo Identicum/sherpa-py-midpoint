@@ -38,7 +38,7 @@ services:
             MP_SET_midpoint_repository_jdbcUsername: midpointusr
             MP_SET_midpoint_repository_jdbcPassword_FILE: /run/secrets/mp_database_password.txt
             MP_SET_midpoint_keystore_keyStorePassword_FILE: /run/secrets/mp_keystore_password.txt
-            MP_SET_midpoint_administrator_initialPassword: Test5ecr3t
+            MP_SET_midpoint_administrator_initialPassword: Sherpa.2026
         volumes:
             - ./secrets/:/run/secrets/:ro
         depends_on:

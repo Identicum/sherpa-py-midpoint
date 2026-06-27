@@ -20,7 +20,7 @@ def main():
 def run(logger, properties):
 	logger.info("{} starting.".format(os.path.basename(__file__)))
 	mp_baseurl = "http://midpoint:8080/midpoint/ws/rest/"
-	midpoint = Midpoint(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Test5ecr3t", properties=properties, logger=logger, iterations=30, interval=30)
+	midpoint = Midpoint(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Sherpa.2026", properties=properties, logger=logger)
 	midpoint.process_subfolders("./testing/objects")
 
 
