@@ -1,0 +1,23 @@
+<user oid="00000000-0000-1de4-0001-000000000001"
+    xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+    xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+    xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3">
+    <name>ggallard</name>
+    <givenName>Gustavo J</givenName>
+    <familyName>Gallardo</familyName>
+    <activation>
+        <administrativeStatus>enabled</administrativeStatus>
+    </activation>
+    <credentials>
+        <password>
+            <value>
+                <clearValue>Sherpa.2026</clearValue>
+            </value>
+        </password>
+    </credentials>
+    <assignment>
+        <targetRef oid="00000000-0000-0000-0000-000000000008" relation="org:default" type="c:RoleType">
+            <!-- End user -->
+        </targetRef>
+    </assignment>
+</user>

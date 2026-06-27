@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import requests
+from requests.auth import HTTPBasicAuth
 import shutil
 import time
 from importlib.metadata import version
@@ -19,6 +20,7 @@ from xml.etree import ElementTree
 endpoints = {
     "AccessCertificationDefinitionType": "accessCertificationDefinitions",
     "ArchetypeType": "archetypes",
+    "CaseType": "cases",
     "ConnectorHostType": "connectorHosts",
     "ConnectorType": "connectors",
     "DashboardType": "dashboards",
@@ -39,6 +41,307 @@ endpoints = {
     "UserType": "users",
     "ValuePolicyType": "valuePolicies"
 }
+
+
+class MidpointError(Exception):
+    """Raised when the Midpoint API returns an unexpected response."""
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class MidpointClient:
+    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = Logger("MidpointClient"), timeout: int = 10, iterations: int = 10, interval: int = 10):
+        self.logger = logger
+        self.logger.debug(f"Midpoint lib version: {version("sherpa-py-midpoint")}")
+        self.base_url = mp_baseurl + "/ws/rest"
+        self.timeout = timeout
+        self.auth = HTTPBasicAuth(mp_username, mp_password)
+        self.session = requests.Session()
+        self.session.auth = self.auth
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        })
+        if on_behalf is not None:
+            self.session.headers["Switch-To-Principal"] = on_behalf
+
+
+        mp_credentials = f"{mp_username}:{mp_password}"
+        self._credentials = base64.b64encode(mp_credentials.encode())
+        url = f"{self.base_url}/users/00000000-0000-0000-0000-000000000002"
+        headers = {'Authorization': f'Basic {self._credentials.decode()}', 'Content-Type': 'application/xml'}
+        http.wait_for_endpoint(url, iterations, interval, logger, headers)
+
+
+    def _get_endpoint(self, object_type: str) -> str:
+        if object_type in endpoints:
+            return "/" + endpoints[object_type]
+        raise AttributeError("Can't find REST type for class " + object_type)
+
+
+    def _http_get(self, path: str, params: dict = None) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"GET {url} params={params}")
+        resp = self.session.get(url, params=params, timeout=self.timeout)
+        self.logger.trace(f"GET {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in [200]:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        return resp.json()
+
+
+    def _http_patch(self, path: str, body: dict = None) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"PATCH {url} body={body}")
+        resp = self.session.patch(url, json=body, timeout=self.timeout)
+        self.logger.trace(f"PATCH {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in [200, 201, 202, 204]:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        if not resp.text:
+            return {}
+        return resp.json()
+
+
+    def _http_post(self, path: str, body: dict = None) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"POST {url} body={body}")
+        resp = self.session.post(url, json=body, timeout=self.timeout)
+        self.logger.trace(f"POST {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in [200, 201, 202, 204]:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        if not resp.text:
+            return {}
+        return resp.json()
+
+
+    def search_objects(self, object_type: str, query_payload: dict) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}, query_payload={query_payload}")
+        json_resp = self._http_post(path=self._get_endpoint(object_type) + "/search", body=query_payload)
+        objects = json_resp.get("object", {}).get("object", [])
+        self.logger.trace(f"objects: {objects}")
+        if isinstance(objects, dict):
+            objects = [objects]
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, query_payload={query_payload}")
+            return []
+        self.logger.trace(f"Returning {len(objects)} objects: {objects}")
+        return objects
+
+
+    def search_object_by_name(self, object_type: str, object_name: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        query_payload = {"query": {"filter": {"equal": {"path": "name", "value": object_name}}}}
+        objects = self.search_objects(object_type, query_payload)
+        self.logger.trace(f"objects: {objects}")
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, name={object_name}")
+            return {}
+        if len(objects) > 1:
+            raise MidpointError(f"Multiple objects found for type={object_type}, name={object_name}")
+        self.logger.trace(f"objects[0]: {objects[0]}")
+        return objects[0]
+
+
+    def get_object(self, object_type: str, object_oid: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_oid={object_oid}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type) + "/" + object_oid)
+        obj = next(iter(json_resp.values()), None)
+        self.logger.trace(f"obj: {obj}")
+        if not obj:
+            self.logger.info(f"Object not found: type={object_type}, name={object_oid}")
+            return None
+        return obj
+
+
+    def get_objects(self, object_type: str) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type))
+        objects = json_resp.get("object", {}).get("object", [])
+        self.logger.trace(f"objects: {objects}")
+        if isinstance(objects, dict):
+            objects = [objects]
+
+
+    def get_object_oid(self, object_type: str, object_name: str) -> str:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        object = self.search_object_by_name(object_type, object_name)
+        if "oid" in object:
+            return object["oid"]
+        else:
+            validators.raise_and_log(self.logger, MidpointError, f"object does not contain oid: {object}")
+
+
+    def get_requestable_roles(self) -> list[dict]:
+        self.logger.debug(f"Starting")
+        query_payload = {
+            "query": {
+                "filter": {
+                    "equal": {
+                        "path": "requestable",
+                        "value": True
+                    }
+                }
+            }
+        }
+        return self.search_objects("RoleType", query_payload)
+
+
+    def request_role_assignment(self, assignee_type: str, assignee_oid: str, role_oid: str) -> dict:
+        self.logger.debug(f"Starting: assignee_type={assignee_type}, assignee_oid={assignee_oid}, role_oid={role_oid}")
+        request_body = {
+            "objectModification": {
+                "itemDelta": [
+                    {
+                        "modificationType": "add",
+                        "path": "assignment",
+                        "value": [
+                            {
+                                "targetRef": {
+                                    "oid": role_oid,
+                                    "type": "c:RoleType",
+                                    "relation": "org:default",
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body)
+        self.logger.debug(f"json_resp={json_resp}")
+        return {"role_name": "TODO", "status": "success", "message": "Role requested"}
+
+
+    def get_work_items(self, assignee_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
+        # ToDo: filter by assignee
+        query_payload = {
+            "query": {
+                "filter": {
+                    "equal": {
+                        "path": "state",
+                        "value": "open"
+                    }
+                }
+            }
+        }
+        return self.search_objects("CaseType", query_payload)
+
+
+    def _extract_display_name(self, ref_or_poly) -> str:
+        """Extract a human-readable name from a Midpoint polyString or objectRef."""
+        self.logger.debug("Starting")
+        if not ref_or_poly:
+            return ""
+        if isinstance(ref_or_poly, str):
+            return ref_or_poly
+        if isinstance(ref_or_poly, dict):
+            return (
+                ref_or_poly.get("orig")
+                or ref_or_poly.get("targetName", {}).get("orig", "")
+                or ref_or_poly.get("name", {}).get("orig", "")
+                or ""
+            )
+        return ""
+
+
+    def _parse_work_item(self, case: dict, item: dict) -> dict:
+        self.logger.debug("Starting")
+        """Flatten a case + work item into a simple dict for the template."""
+        case_oid = case.get("oid", "")
+        item_id = item.get("id", "")
+
+        # Requester — who initiated the request
+        requester_ref = case.get("requestorRef", {})
+        requester = self._extract_display_name(requester_ref)
+
+        # Object being acted on (e.g. the user receiving a role)
+        object_ref = case.get("objectRef", {})
+        target_object = self._extract_display_name(object_ref)
+
+        # What is being requested (e.g. the role name)
+        target_ref = case.get("targetRef", {})
+        target = self._extract_display_name(target_ref)
+
+        # Case name / description
+        case_name = self._extract_display_name(case.get("name")) or case.get("description", "")
+
+        # Work item deadline
+        deadline = item.get("deadline", "")
+
+        return {
+            "case_oid": case_oid,
+            "item_id": item_id,
+            "case_name": case_name,
+            "requester": requester or target_object,
+            "target": target,
+            "deadline": deadline[:10] if deadline else "",   # ISO date only
+            "stage": case.get("stageNumber", ""),
+        }
+
+
+    def get_work_item_summary(self, case_oid: str, item_id: str) -> dict | None:
+        self.logger.debug("Starting")
+        try:
+            cases_endpoint = self._get_endpoint("CaseType")
+            case_data = self._http_get(path=f"{cases_endpoint}/{case_oid}")
+            items = case_data.get("workItem", [])
+            if isinstance(items, dict):
+                items = [items]
+            item = next((i for i in items if str(i.get("id")) == str(item_id)), None)
+            if item:
+                return self._parse_work_item(case_data, item)
+        except Exception:
+            pass
+        return None
+
+
+    def _decide_work_item(self, case_oid: str, item_id: str, decision: str) -> dict:
+        """
+        Submit an approve or reject decision for a work item.
+
+        Midpoint REST endpoint:
+        POST /cases/{caseOid}/workItems/{itemId}/{approve|reject}
+
+        Body (optional comment):
+        { "comment": "Approved via Midpoint Home" }
+        """
+        self.logger.debug(f"Starting: case_oid={case_oid}", item_id={item_id}, decision={decision})
+        try:
+            # First check if the work item still exists and is open
+            cases_endpoint = self._get_endpoint("CaseType")
+            case_data = self._http_get(path=f"{cases_endpoint}/{case_oid}")
+            items = case_data.get("workItem", [])
+            if isinstance(items, dict):
+                items = [items]
+            item = next((i for i in items if str(i.get("id")) == str(item_id)), None)
+            if item is None:
+                return {"status": "not_found", "decision": decision}
+            if item.get("output"):
+                # Already decided
+                existing = item["output"].get("outcome", "unknown")
+                return {"status": "already_done", "decision": decision, "existing": existing}
+            self._http_post(path=f"{cases_endpoint}/{case_oid}/workItems/{item_id}/{decision}", body={"comment": f"Decision submitted via Sherpa IGA Home"})
+            return {"status": "success", "decision": decision}
+        except Exception as e:
+            return {"status": "error", "decision": decision, "message": str(e)}
+
+
+    def approve_work_item(self, case_oid: str, item_id: str) -> dict:
+        """
+        Approve a work item.
+        Returns a result dict with success/already_done/error status.
+        """
+        self.logger.debug("Starting")
+        return self._decide_work_item(case_oid, item_id, "approve")
+
+
+    def reject_work_item(self, case_oid: str, item_id: str) -> dict:
+        """
+        Reject a work item.
+        """
+        self.logger.debug("Starting")
+        return self._decide_work_item(case_oid, item_id, "reject")
 
 
 class Midpoint:
