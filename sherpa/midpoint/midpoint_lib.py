@@ -386,12 +386,10 @@ class MidpointClient:
             }
         }
         roles = self._search_objects(object_type="RoleType", query_payload=query_payload)
-        returned_roles = []
         normalized_user = self.get_user(oid=user_oid)
-        if "role_membership" in normalized_user:
-            role_membership = normalized_user["role_membership"]
-            
-        return self._normalize_objects(roles)
+        member_oids = {m["oid"] for m in normalized_user.get("role_membership", [])}
+        normalized_roles = self._normalize_objects(roles)
+        return [r for r in normalized_roles if r.get("oid") not in member_oids]
 
 
     def request_role_assignment(self, assignee_type: str, assignee_oid: str, role_oid: str) -> dict:
@@ -415,9 +413,10 @@ class MidpointClient:
                 ]
             }
         }
-        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body)
+        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body, expected_status=[204])
         self.logger.debug(f"json_resp={json_resp}")
-        return {"role_name": "TODO", "status": "success", "message": "Role requested"}
+        role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
+        return {"role_name": role_object["name"], "status": "success", "message": "Role requested"}
 
 
     # ###############################################################################
