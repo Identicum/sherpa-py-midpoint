@@ -131,7 +131,78 @@ class MidpointClient:
         return ""
 
 
+    def _normalize_object_reference(self, reference: dict, allowed_type: str = "*") -> list[dict]:
+        self.logger.trace(f"Starting, reference: {reference}. Allowed type: {allowed_type}")
+        normalized_reference = {}
+        reference_type = reference["type"].removeprefix("c:")
+        reference_oid = reference["oid"]
+        self.logger.trace(f"Reference({reference_type}): {reference_oid}")
+        if allowed_type == "*" or reference_type == allowed_type:
+            self.logger.trace("Processing reference.")
+            normalized_reference["type"] = reference_type.removesuffix("Type")
+            reference_object = self._get_object(object_type=reference_type, object_oid=reference_oid)
+            normalized_reference["oid"] = reference_oid
+            normalized_reference["name"] = reference_object["name"]
+            if "relation" in reference:
+                normalized_reference["relation"] = reference["relation"]
+        return normalized_reference
+
+
+    def _normalize_object_references(self, references, allowed_type: str = "*") -> list[dict]:
+        normalized_references = []
+        if isinstance(references, dict):
+            references = [references]
+        self.logger.trace(f"Processing {len(references)} reference/s. Type: {allowed_type}")
+        for reference in references:
+            normalized_reference = self._normalize_object_reference(reference=reference, allowed_type=allowed_type)
+            if normalized_reference:
+                normalized_references.append(normalized_reference)
+        self.logger.trace(f"Returning normalized references: {normalized_references}")
+        return normalized_references
+
+
+    def _normalize_assignments(self, assignments, allowed_type: str = "*", allowed_status: str = "*") -> list[dict]:
+        self.logger.trace(f"Processing assignments: {assignments}")
+        normalized_assignments = []
+        if isinstance(assignments, dict):
+            assignments = [assignments]
+        for assignment in assignments:
+            normalized_assignment = {}
+            targetRef = assignment["targetRef"]
+            target_type = targetRef["type"].removeprefix("c:")
+            assignment_status = assignment.get("activation").get("effectiveStatus")
+            if allowed_type in ["*", target_type] and allowed_status in ["*", assignment_status]:
+                normalized_assignment["type"] = target_type.removesuffix("Type")
+                target_oid = targetRef["oid"]
+                target_object = self._get_object(object_type=target_type, object_oid=target_oid)
+                normalized_assignment["oid"] = target_oid
+                normalized_assignment["relation"] = targetRef["relation"]
+                normalized_assignment["name"] = target_object["name"]
+                normalized_assignments.append(normalized_assignment)
+        return normalized_assignments
+
+
+    def _normalize_case_workitem(self, workitem: dict) -> dict:
+        self.logger.trace("workitem: {}", workitem)
+        normalized_workitem = {}
+        normalized_workitem["id"] = workitem["@id"]
+        normalized_workitem["name"] = workitem["name"]["orig"]
+        normalized_workitem["assignee"] = self._normalize_object_reference(workitem["assigneeRef"])
+        return normalized_workitem
+
+
+    def _normalize_case_workitems(self, workitems) -> dict:
+        normalized_workitems = []
+        if isinstance(workitems, dict):
+            workitems = [workitems]
+        self.logger.trace(f"Processing {len(workitems)} workitem/s")
+        for workitem in workitems:
+            normalized_workitems.append(self._normalize_case_workitem(workitem))
+        return normalized_workitems
+
+
     def _normalize_object(self, raw_object: dict) -> dict:
+        self.logger.trace(f"Processing object: {raw_object}")
         normalized_object = {}
         object_type = ""
 
@@ -145,14 +216,12 @@ class MidpointClient:
 
         match object_type:
             case "Case":
-                for reference in ["objectRef", "targetRef", "requestorRef"]:
-                    reference_dict = raw_object[reference]
-                    reference_type = reference_dict["type"].removeprefix("c:")
-                    reference_oid = reference_dict["oid"]
-                    normalized_object[f"{reference}_type"] = reference_type.removesuffix("Type")
-                    normalized_object[f"{reference}_oid"] = reference_oid
-                    reference_object = self._get_object(object_type=reference_type, object_oid=reference_oid)
-                    normalized_object[f"{reference}_name"] = reference_object["name"]
+                for attr in ["state"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+                for reference in ["object", "target", "requestor"]:
+                    normalized_object[reference] = self._normalize_object_reference(raw_object[f"{reference}Ref"])
+                normalized_object["workitems"] = self._normalize_case_workitems(raw_object["workItem"])
                 # override name
                 name_orig = normalized_object["name"]["orig"]
                 normalized_object["name"] = name_orig
@@ -164,43 +233,8 @@ class MidpointClient:
                 for attr in ["givenName", "familyName"]:
                     if attr in raw_object:
                         normalized_object[attr]=raw_object[attr]
-                role_assigment = []
-                if "assignment" in raw_object:
-                    assignment = raw_object["assignment"]
-                    if isinstance(assignment, dict):
-                        assignment = [assignment]
-                    for assignment_instance in assignment:
-                        role_assignment_instance = {}
-                        targetRef = assignment_instance["targetRef"]
-                        membership_type = targetRef["type"].removeprefix("c:")
-                        membership_activation = assignment_instance["activation"]
-                        membership_status = membership_activation["effectiveStatus"]
-                        if membership_type == "RoleType" and membership_status == "enabled":
-                            role_assignment_instance["type"] = membership_type
-                            role_oid = targetRef["oid"]
-                            role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
-                            role_assignment_instance["oid"] = role_oid
-                            role_assignment_instance["relation"] = targetRef["relation"]
-                            role_assignment_instance["name"] = role_object["name"]
-                            role_assigment.append(role_assignment_instance)
-                normalized_object["role_assigment"] = role_assigment
-                role_membership = []
-                if "roleMembershipRef" in raw_object:
-                    roleMembershipRef = raw_object["roleMembershipRef"]
-                    if isinstance(roleMembershipRef, dict):
-                        roleMembershipRef = [roleMembershipRef]
-                    for roleMembershipRef_instance in roleMembershipRef:
-                        role_membership_instance = {}
-                        membership_type = roleMembershipRef_instance["type"].removeprefix("c:")
-                        if membership_type == "RoleType":
-                            role_membership_instance["type"] = membership_type
-                            role_oid = roleMembershipRef_instance["oid"]
-                            role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
-                            role_membership_instance["oid"] = role_oid
-                            role_membership_instance["relation"] = roleMembershipRef_instance["relation"]
-                            role_membership_instance["name"] = role_object["name"]
-                            role_membership.append(role_membership_instance)
-                normalized_object["role_membership"] = role_membership
+                normalized_object["role_assignment"] = self._normalize_assignments(raw_object.get("assignment", []), "RoleType", "enabled")
+                normalized_object["role_membership"] = self._normalize_object_references(raw_object.get("roleMembershipRef", []), "RoleType")
         return normalized_object
 
 
@@ -289,103 +323,56 @@ class MidpointClient:
         return self._normalize_objects(case_objects)
 
 
-    def _parse_work_item(self, case: dict, item: dict) -> dict:
-        self.logger.debug("Starting")
-        """Flatten a case + work item into a simple dict for the template."""
-        case_oid = case.get("oid", "")
-        item_id = item.get("id", "")
-
-        # Requester — who initiated the request
-        requester_ref = case.get("requestorRef", {})
-        requester = self._extract_display_name(requester_ref)
-
-        # Object being acted on (e.g. the user receiving a role)
-        object_ref = case.get("objectRef", {})
-        target_object = self._extract_display_name(object_ref)
-
-        # What is being requested (e.g. the role name)
-        target_ref = case.get("targetRef", {})
-        target = self._extract_display_name(target_ref)
-
-        # Case name / description
-        case_name = self._extract_display_name(case.get("name")) or case.get("description", "")
-
-        # Work item deadline
-        deadline = item.get("deadline", "")
-
-        return {
-            "case_oid": case_oid,
-            "item_id": item_id,
-            "case_name": case_name,
-            "requester": requester or target_object,
-            "target": target,
-            "deadline": deadline[:10] if deadline else "",   # ISO date only
-            "stage": case.get("stageNumber", ""),
-        }
-
-
-    def get_work_item_summary(self, case_oid: str, item_id: str) -> dict | None:
-        self.logger.debug("Starting")
-        try:
-            cases_endpoint = self._get_endpoint("CaseType")
-            case_data = self._http_get(path=f"{cases_endpoint}/{case_oid}")
-            items = case_data.get("workItem", [])
-            if isinstance(items, dict):
-                items = [items]
-            item = next((i for i in items if str(i.get("id")) == str(item_id)), None)
-            if item:
-                return self._parse_work_item(case_data, item)
-        except Exception:
-            pass
-        return None
-
-
-    def _decide_work_item(self, case_oid: str, item_id: str, decision: str) -> dict:
+    def _decide_work_item(self, case_oid: str, item_id: int, decision: str, comment: str) -> dict:
         """
         Submit an approve or reject decision for a work item.
-
-        Midpoint REST endpoint:
-        POST /cases/{caseOid}/workItems/{itemId}/{approve|reject}
-
-        Body (optional comment):
-        { "comment": "Approved via Midpoint Home" }
         """
-        self.logger.debug(f"Starting: case_oid={case_oid}", item_id={item_id}, decision={decision})
+        self.logger.debug(f"Starting: case_oid={case_oid}, item_id={item_id}, decision={decision}")
         try:
             # First check if the work item still exists and is open
             cases_endpoint = self._get_endpoint("CaseType")
             case_data = self._http_get(path=f"{cases_endpoint}/{case_oid}")
-            items = case_data.get("workItem", [])
+            self.logger.trace("case_data={}", case_data)
+            items = case_data.get("case", {}).get("workItem", [])
+            self.logger.trace("items={}", items)
             if isinstance(items, dict):
                 items = [items]
-            item = next((i for i in items if str(i.get("id")) == str(item_id)), None)
+            item = next((i for i in items if i.get("@id") == item_id), None)
+            self.logger.trace("item={}", item)
             if item is None:
                 return {"status": "not_found", "decision": decision}
             if item.get("output"):
                 # Already decided
                 existing = item["output"].get("outcome", "unknown")
                 return {"status": "already_done", "decision": decision, "existing": existing}
-            self._http_post(path=f"{cases_endpoint}/{case_oid}/workItems/{item_id}/{decision}", body={"comment": f"Decision submitted via Sherpa IGA Home"})
+            body = {
+                "output" : {
+                    "@type" : "c:AbstractWorkItemOutputType",
+                    "comment" : comment or "Decision submitted via sherpa-py-midpoint library",
+                    "outcome" : f"http://midpoint.evolveum.com/xml/ns/public/model/approval/outcome#{decision}"
+                }
+            }
+            self._http_post(path=f"{cases_endpoint}/{case_oid}/workItems/{str(item_id)}/complete", body=body, expected_status=[204])
             return {"status": "success", "decision": decision}
         except Exception as e:
             return {"status": "error", "decision": decision, "message": str(e)}
 
 
-    def approve_work_item(self, case_oid: str, item_id: str) -> dict:
+    def approve_work_item(self, case_oid: str, item_id: int, comment: str = None) -> dict:
         """
         Approve a work item.
         Returns a result dict with success/already_done/error status.
         """
-        self.logger.debug("Starting")
-        return self._decide_work_item(case_oid, item_id, "approve")
+        self.logger.debug(f"Approving workItem: {item_id} in case: {case_oid}")
+        return self._decide_work_item(case_oid=case_oid, item_id=item_id, decision="approve", comment=comment)
 
 
-    def reject_work_item(self, case_oid: str, item_id: str) -> dict:
+    def reject_work_item(self, case_oid: str, item_id: int, comment: str = None) -> dict:
         """
         Reject a work item.
         """
-        self.logger.debug("Starting")
-        return self._decide_work_item(case_oid, item_id, "reject")
+        self.logger.debug(f"Rejecting workItem: {item_id} in case: {case_oid}")
+        return self._decide_work_item(case_oid=case_oid, item_id=item_id, decision="reject", comment=comment)
 
 
     # ###############################################################################
