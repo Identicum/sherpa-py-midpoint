@@ -104,7 +104,7 @@ class MidpointClient:
 
     def _http_post(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
         url = self.base_url + path
-        self.logger.debug(f"POST {url} body={body}")
+        self.logger.debug(f"POST {url}, body={body}, headers={self.session.headers}")
         resp = self.session.post(url, json=body, timeout=self.timeout)
         self.logger.trace(f"POST {url} -> status={resp.status_code} body={resp.text}")
         if resp.status_code not in expected_status:
@@ -144,6 +144,18 @@ class MidpointClient:
                 normalized_object[attr]=raw_object[attr]
 
         match object_type:
+            case "Case":
+                for reference in ["objectRef", "targetRef", "requestorRef"]:
+                    reference_dict = raw_object[reference]
+                    reference_type = reference_dict["type"].removeprefix("c:")
+                    reference_oid = reference_dict["oid"]
+                    normalized_object[f"{reference}_type"] = reference_type.removesuffix("Type")
+                    normalized_object[f"{reference}_oid"] = reference_oid
+                    reference_object = self._get_object(object_type=reference_type, object_oid=reference_oid)
+                    normalized_object[f"{reference}_name"] = reference_object["name"]
+                # override name
+                name_orig = normalized_object["name"]["orig"]
+                normalized_object["name"] = name_orig
             case "Role":
                 for attr in ["requestable"]:
                     if attr in raw_object:
@@ -263,17 +275,18 @@ class MidpointClient:
     # ###############################################################################
     # Case
 
-    def get_open_work_items(self, assignee_oid: str) -> list[dict]:
+    def get_assigned_cases(self, assignee_oid: str) -> list[dict]:
         self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
         # ToDo: filter by assignee
         query_payload = {
             "query": {
                 "filter": {
-                    "text": f"workItem/assigneeRef matches (oid = \"{assignee_oid}\") and state = \"open\""
+                    "text": f'state = "open" and workItem/assigneeRef matches (oid = "{assignee_oid}")'
                 }
             }
         }
-        return self.search_objects("CaseType", query_payload)
+        case_objects = self._search_objects("CaseType", query_payload)
+        return self._normalize_objects(case_objects)
 
 
     def _parse_work_item(self, case: dict, item: dict) -> dict:
