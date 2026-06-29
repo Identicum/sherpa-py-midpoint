@@ -145,6 +145,7 @@ class MidpointClient:
             normalized_reference["name"] = reference_object["name"]
             if "relation" in reference:
                 normalized_reference["relation"] = reference["relation"]
+        self.logger.trace(f"Returning normalized reference: {normalized_reference}")
         return normalized_reference
 
 
@@ -220,8 +221,15 @@ class MidpointClient:
                     if attr in raw_object:
                         normalized_object[attr]=raw_object[attr]
                 for reference in ["object", "target", "requestor"]:
-                    normalized_object[reference] = self._normalize_object_reference(raw_object[f"{reference}Ref"])
-                normalized_object["workitems"] = self._normalize_case_workitems(raw_object["workItem"])
+                    reference_key = f"{reference}Ref"
+                    if reference_key in raw_object:
+                        self.logger.debug(f"Normalizing reference: {reference_key}")
+                        normalized_object[reference] = self._normalize_object_reference(raw_object[reference_key])
+                if "workItem" in raw_object:
+                    normalized_object["workitems"] = self._normalize_case_workitems(raw_object["workItem"])
+                else:
+                    # discard parent "empty" case
+                    return {}
                 # override name
                 name_orig = normalized_object["name"]["orig"]
                 normalized_object["name"] = name_orig
@@ -242,7 +250,10 @@ class MidpointClient:
         self.logger.debug(f"Processing {len(raw_objects)} objects")
         normalized_objects = []
         for raw_object in raw_objects:
-            normalized_objects.append(self._normalize_object(raw_object))
+            normalized_object = self._normalize_object(raw_object)
+            # discard empty objects
+            if normalized_object:
+                normalized_objects.append(normalized_object)
         return normalized_objects
 
 
@@ -309,9 +320,21 @@ class MidpointClient:
     # ###############################################################################
     # Case
 
+    def get_requested_cases(self, requestor_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting: requestor_oid={requestor_oid}")
+        query_payload = {
+            "query": {
+                "filter": {
+                    "text": f'state = "open" and requestorRef matches (oid = "{requestor_oid}")'
+                }
+            }
+        }
+        case_objects = self._search_objects("CaseType", query_payload)
+        return self._normalize_objects(case_objects)
+
+
     def get_assigned_cases(self, assignee_oid: str) -> list[dict]:
         self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
-        # ToDo: filter by assignee
         query_payload = {
             "query": {
                 "filter": {
