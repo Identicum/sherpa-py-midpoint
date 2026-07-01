@@ -1,0 +1,48 @@
+[
+  {
+    "object_type": "Case",
+    "oid": "4beb6954-141f-4896-abaa-1071b5b88f8c",
+    "name": "Assigning role \"ASANA_ACCOUNT\" to user \"Usuario Uno (user1)\"",
+    "state": "open",
+    "object": {
+      "type": "User",
+      "oid": "00000000-0000-1de4-0001-000000000011",
+      "name": "user1",
+      "relation": "org:default"
+    },
+    "target": {
+      "type": "Role",
+      "oid": "00000000-0000-1de4-0004-100000001001",
+      "name": "ASANA_ACCOUNT",
+      "relation": "org:default"
+    },
+    "requestor": {
+      "type": "User",
+      "oid": "00000000-0000-1de4-0001-000000000011",
+      "name": "user1",
+      "relation": "org:default"
+    },
+    "workitems": [
+      {
+        "id": 5,
+        "name": "Assigning role \"ASANA_ACCOUNT\" to user \"Usuario Uno (user1)\"",
+        "assignee": {
+          "type": "User",
+          "oid": "00000000-0000-1de4-0001-000000000022",
+          "name": "owner2",
+          "relation": "org:default"
+        }
+      },
+      {
+        "id": 6,
+        "name": "Assigning role \"ASANA_ACCOUNT\" to user \"Usuario Uno (user1)\"",
+        "assignee": {
+          "type": "User",
+          "oid": "00000000-0000-1de4-0001-000000000021",
+          "name": "owner1",
+          "relation": "org:default"
+        }
+      }
+    ]
+  }
+]

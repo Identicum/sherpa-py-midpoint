@@ -1,3 +1,5 @@
+name: sherpa-py-midpoint
+
 services:
     db:
         container_name: db

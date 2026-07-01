@@ -1,0 +1,14 @@
+[
+  {
+    "object_type": "Role",
+    "oid": "00000000-0000-1de4-0004-100000001001",
+    "name": "ASANA_ACCOUNT",
+    "requestable": true
+  },
+  {
+    "object_type": "Role",
+    "oid": "00000000-0000-1de4-0004-100000001002",
+    "name": "CALENDLY_ACCOUNT",
+    "requestable": true
+  }
+]
