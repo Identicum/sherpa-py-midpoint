@@ -1,3 +1,5 @@
+name: sherpa-py-midpoint
+
 services:
     db:
         container_name: db
@@ -13,7 +15,7 @@ services:
 
     midpoint_presetup:
         container_name: midpoint_presetup
-        image: ghcr.io/identicum/midpoint:4.10
+        image: ghcr.io/identicum/midpoint_4.10:latest
         pull_policy: always
         environment:
             REPO_URL: jdbc:postgresql://db:5432/midpointdb
@@ -28,7 +30,7 @@ services:
 
     midpoint:
         container_name: midpoint
-        image: ghcr.io/identicum/midpoint:4.10
+        image: ghcr.io/identicum/midpoint_4.10:latest
         pull_policy: always
         ports:
             - 8080:8080
@@ -38,7 +40,7 @@ services:
             MP_SET_midpoint_repository_jdbcUsername: midpointusr
             MP_SET_midpoint_repository_jdbcPassword_FILE: /run/secrets/mp_database_password.txt
             MP_SET_midpoint_keystore_keyStorePassword_FILE: /run/secrets/mp_keystore_password.txt
-            MP_SET_midpoint_administrator_initialPassword: Test5ecr3t
+            MP_SET_midpoint_administrator_initialPassword: Sherpa.2026
         volumes:
             - ./secrets/:/run/secrets/:ro
         depends_on:

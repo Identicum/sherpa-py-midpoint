@@ -1,0 +1,23 @@
+{
+  "object_type": "User",
+  "oid": "00000000-0000-1de4-0001-000000000011",
+  "name": "user1",
+  "givenName": "Usuario",
+  "familyName": "Uno",
+  "role_assignment": [
+    {
+      "type": "Role",
+      "oid": "00000000-0000-1de4-0004-100000000001",
+      "relation": "org:default",
+      "name": "SHERPA_END_USER"
+    }
+  ],
+  "role_membership": [
+    {
+      "type": "Role",
+      "oid": "00000000-0000-1de4-0004-100000000001",
+      "name": "SHERPA_END_USER",
+      "relation": "org:default"
+    }
+  ]
+}

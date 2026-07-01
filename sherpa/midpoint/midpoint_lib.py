@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import requests
+from requests.auth import HTTPBasicAuth
 import shutil
 import time
 from importlib.metadata import version
@@ -19,6 +20,7 @@ from xml.etree import ElementTree
 endpoints = {
     "AccessCertificationDefinitionType": "accessCertificationDefinitions",
     "ArchetypeType": "archetypes",
+    "CaseType": "cases",
     "ConnectorHostType": "connectorHosts",
     "ConnectorType": "connectors",
     "DashboardType": "dashboards",
@@ -39,6 +41,426 @@ endpoints = {
     "UserType": "users",
     "ValuePolicyType": "valuePolicies"
 }
+
+
+class MidpointError(Exception):
+    """Raised when the Midpoint API returns an unexpected response."""
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class MidpointClient:
+    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = Logger("MidpointClient"), timeout: int = 10, iterations: int = 10, interval: int = 10):
+        self.logger = logger
+        self.logger.debug(f"Midpoint lib version: {version("sherpa-py-midpoint")}")
+        self.base_url = mp_baseurl + "/ws/rest"
+        self.timeout = timeout
+        self.auth = HTTPBasicAuth(mp_username, mp_password)
+        self.session = requests.Session()
+        self.session.auth = self.auth
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        })
+        if on_behalf is not None:
+            self.session.headers["Switch-To-Principal"] = on_behalf
+
+
+        mp_credentials = f"{mp_username}:{mp_password}"
+        self._credentials = base64.b64encode(mp_credentials.encode())
+        url = f"{self.base_url}/users/00000000-0000-0000-0000-000000000002"
+        headers = {'Authorization': f'Basic {self._credentials.decode()}', 'Content-Type': 'application/xml'}
+        http.wait_for_endpoint(url, iterations, interval, logger, headers)
+
+
+    def _get_endpoint(self, object_type: str) -> str:
+        if object_type in endpoints:
+            return "/" + endpoints[object_type]
+        raise AttributeError("Can't find REST type for class " + object_type)
+
+
+    def _http_get(self, path: str, params: dict = None, expected_status: list[int] = [200]) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"GET {url} params={params}")
+        resp = self.session.get(url, params=params, timeout=self.timeout)
+        self.logger.trace(f"GET {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in expected_status:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        return resp.json()
+
+
+    def _http_patch(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"PATCH {url} body={body}")
+        resp = self.session.patch(url, json=body, timeout=self.timeout)
+        self.logger.trace(f"PATCH {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in expected_status:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        if not resp.text:
+            return {}
+        return resp.json()
+
+
+    def _http_post(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"POST {url}, body={body}, headers={self.session.headers}")
+        resp = self.session.post(url, json=body, timeout=self.timeout)
+        self.logger.trace(f"POST {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in expected_status:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        if not resp.text:
+            return {}
+        return resp.json()
+
+
+    def _extract_display_name(self, ref_or_poly) -> str:
+        """Extract a human-readable name from a Midpoint polyString or objectRef."""
+        self.logger.debug("Starting")
+        if not ref_or_poly:
+            return ""
+        if isinstance(ref_or_poly, str):
+            return ref_or_poly
+        if isinstance(ref_or_poly, dict):
+            return (
+                ref_or_poly.get("orig")
+                or ref_or_poly.get("targetName", {}).get("orig", "")
+                or ref_or_poly.get("name", {}).get("orig", "")
+                or ""
+            )
+        return ""
+
+
+    def _normalize_object_reference(self, reference: dict, allowed_type: str = "*") -> list[dict]:
+        self.logger.trace(f"Starting, reference: {reference}. Allowed type: {allowed_type}")
+        normalized_reference = {}
+        reference_type = reference["type"].removeprefix("c:")
+        reference_oid = reference["oid"]
+        self.logger.trace(f"Reference({reference_type}): {reference_oid}")
+        if allowed_type == "*" or reference_type == allowed_type:
+            self.logger.trace("Processing reference.")
+            normalized_reference["type"] = reference_type.removesuffix("Type")
+            reference_object = self._get_object(object_type=reference_type, object_oid=reference_oid)
+            normalized_reference["oid"] = reference_oid
+            normalized_reference["name"] = reference_object["name"]
+            if "relation" in reference:
+                normalized_reference["relation"] = reference["relation"]
+        self.logger.trace(f"Returning normalized reference: {normalized_reference}")
+        return normalized_reference
+
+
+    def _normalize_object_references(self, references, allowed_type: str = "*") -> list[dict]:
+        normalized_references = []
+        if isinstance(references, dict):
+            references = [references]
+        self.logger.trace(f"Processing {len(references)} reference/s. Type: {allowed_type}")
+        for reference in references:
+            normalized_reference = self._normalize_object_reference(reference=reference, allowed_type=allowed_type)
+            if normalized_reference:
+                normalized_references.append(normalized_reference)
+        self.logger.trace(f"Returning normalized references: {normalized_references}")
+        return normalized_references
+
+
+    def _normalize_assignments(self, assignments, allowed_type: str = "*", allowed_status: str = "*") -> list[dict]:
+        self.logger.trace(f"Processing assignments: {assignments}")
+        normalized_assignments = []
+        if isinstance(assignments, dict):
+            assignments = [assignments]
+        for assignment in assignments:
+            normalized_assignment = {}
+            targetRef = assignment["targetRef"]
+            target_type = targetRef["type"].removeprefix("c:")
+            assignment_status = assignment.get("activation").get("effectiveStatus")
+            if allowed_type in ["*", target_type] and allowed_status in ["*", assignment_status]:
+                normalized_assignment["type"] = target_type.removesuffix("Type")
+                target_oid = targetRef["oid"]
+                target_object = self._get_object(object_type=target_type, object_oid=target_oid)
+                normalized_assignment["oid"] = target_oid
+                normalized_assignment["relation"] = targetRef["relation"]
+                normalized_assignment["name"] = target_object["name"]
+                normalized_assignments.append(normalized_assignment)
+        return normalized_assignments
+
+
+    def _normalize_case_workitem(self, workitem: dict) -> dict:
+        self.logger.trace("workitem: {}", workitem)
+        normalized_workitem = {}
+        normalized_workitem["id"] = workitem["@id"]
+        normalized_workitem["name"] = workitem["name"]["orig"]
+        normalized_workitem["assignee"] = self._normalize_object_reference(workitem["assigneeRef"])
+        return normalized_workitem
+
+
+    def _normalize_case_workitems(self, workitems) -> dict:
+        normalized_workitems = []
+        if isinstance(workitems, dict):
+            workitems = [workitems]
+        self.logger.trace(f"Processing {len(workitems)} workitem/s")
+        for workitem in workitems:
+            normalized_workitems.append(self._normalize_case_workitem(workitem))
+        return normalized_workitems
+
+
+    def _normalize_object(self, raw_object: dict) -> dict:
+        self.logger.trace(f"Processing object: {raw_object}")
+        normalized_object = {}
+        object_type = ""
+
+        if "@type" in raw_object:
+            object_type = raw_object["@type"].removeprefix("c:").removesuffix("Type")
+            normalized_object["object_type"]=object_type
+
+        for attr in ["oid", "name", "description"]:
+            if attr in raw_object:
+                normalized_object[attr]=raw_object[attr]
+
+        match object_type:
+            case "Case":
+                for attr in ["state"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+                for reference in ["object", "target", "requestor"]:
+                    reference_key = f"{reference}Ref"
+                    if reference_key in raw_object:
+                        self.logger.debug(f"Normalizing reference: {reference_key}")
+                        normalized_object[reference] = self._normalize_object_reference(raw_object[reference_key])
+                if "workItem" in raw_object:
+                    normalized_object["workitems"] = self._normalize_case_workitems(raw_object["workItem"])
+                else:
+                    # discard parent "empty" case
+                    return {}
+                # override name
+                name_orig = normalized_object["name"]["orig"]
+                normalized_object["name"] = name_orig
+            case "Role":
+                for attr in ["requestable"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+            case "User":
+                for attr in ["givenName", "familyName"]:
+                    if attr in raw_object:
+                        normalized_object[attr]=raw_object[attr]
+                normalized_object["role_assignment"] = self._normalize_assignments(raw_object.get("assignment", []), "RoleType", "enabled")
+                normalized_object["role_membership"] = self._normalize_object_references(raw_object.get("roleMembershipRef", []), "RoleType")
+        return normalized_object
+
+
+    def _normalize_objects(self, raw_objects: list[dict]) -> list[dict]:
+        self.logger.debug(f"Processing {len(raw_objects)} objects")
+        normalized_objects = []
+        for raw_object in raw_objects:
+            normalized_object = self._normalize_object(raw_object)
+            # discard empty objects
+            if normalized_object:
+                normalized_objects.append(normalized_object)
+        return normalized_objects
+
+
+    def _search_objects(self, object_type: str, query_payload: dict) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}, query_payload={query_payload}")
+        json_resp = self._http_post(path=self._get_endpoint(object_type) + "/search", body=query_payload)
+        self.logger.trace(f"json_resp: {json_resp}")
+        objects = json_resp.get("object", {}).get("object", [])
+        if isinstance(objects, dict):
+            objects = [objects]
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, query_payload={query_payload}")
+            return []
+        self.logger.trace(f"Returning {len(objects)} objects: {objects}")
+        return objects
+
+
+    def _search_object_by_name(self, object_type: str, object_name: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        query_payload = {"query": {"filter": {"equal": {"path": "name", "value": object_name}}}}
+        objects = self._search_objects(object_type, query_payload)
+        self.logger.trace(f"objects: {objects}")
+        if not objects:
+            self.logger.info(f"Object not found: type={object_type}, name={object_name}")
+            return {}
+        if len(objects) > 1:
+            raise MidpointError(f"Multiple objects found for type={object_type}, name={object_name}")
+        self.logger.trace(f"objects[0]: {objects[0]}")
+        return objects[0]
+
+
+    def _get_object(self, object_type: str, object_oid: str) -> dict:
+        self.logger.debug(f"Starting: object_type={object_type}, object_oid={object_oid}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type) + "/" + object_oid)
+        obj = next(iter(json_resp.values()), None)
+        self.logger.trace(f"obj: {obj}")
+        if not obj:
+            self.logger.info(f"Object not found: type={object_type}, name={object_oid}")
+            return None
+        return obj
+
+
+    def _get_objects(self, object_type: str) -> list[dict]:
+        self.logger.debug(f"Starting: object_type={object_type}")
+        json_resp = self._http_get(path=self._get_endpoint(object_type))
+        objects = json_resp.get("object", {}).get("object", [])
+        self.logger.trace(f"objects: {objects}")
+        if isinstance(objects, dict):
+            objects = [objects]
+
+
+    # ###############################################################################
+    # General
+
+    def get_object_oid(self, object_type: str, object_name: str) -> str:
+        self.logger.debug(f"Starting: object_type={object_type}, object_name={object_name}")
+        object = self._search_object_by_name(object_type, object_name)
+        if "oid" in object:
+            return object["oid"]
+        else:
+            validators.raise_and_log(self.logger, MidpointError, f"object does not contain oid: {object}")
+
+
+    # ###############################################################################
+    # Case
+
+    def get_requested_cases(self, requestor_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting: requestor_oid={requestor_oid}")
+        query_payload = {
+            "query": {
+                "filter": {
+                    "text": f'state = "open" and requestorRef matches (oid = "{requestor_oid}")'
+                }
+            }
+        }
+        case_objects = self._search_objects("CaseType", query_payload)
+        return self._normalize_objects(case_objects)
+
+
+    def get_assigned_cases(self, assignee_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting: assignee_oid={assignee_oid}")
+        query_payload = {
+            "query": {
+                "filter": {
+                    "text": f'state = "open" and workItem/assigneeRef matches (oid = "{assignee_oid}")'
+                }
+            }
+        }
+        case_objects = self._search_objects("CaseType", query_payload)
+        return self._normalize_objects(case_objects)
+
+
+    def _decide_work_item(self, case_oid: str, item_id: int, decision: str, comment: str) -> dict:
+        """
+        Submit an approve or reject decision for a work item.
+        """
+        self.logger.debug(f"Starting: case_oid={case_oid}, item_id={item_id}, decision={decision}")
+        try:
+            # First check if the work item still exists and is open
+            cases_endpoint = self._get_endpoint("CaseType")
+            case_data = self._http_get(path=f"{cases_endpoint}/{case_oid}")
+            self.logger.trace("case_data={}", case_data)
+            items = case_data.get("case", {}).get("workItem", [])
+            self.logger.trace("items={}", items)
+            if isinstance(items, dict):
+                items = [items]
+            item = next((i for i in items if i.get("@id") == item_id), None)
+            self.logger.trace("item={}", item)
+            if item is None:
+                return {"status": "not_found", "decision": decision}
+            if item.get("output"):
+                # Already decided
+                existing = item["output"].get("outcome", "unknown")
+                return {"status": "already_done", "decision": decision, "existing": existing}
+            body = {
+                "output" : {
+                    "@type" : "c:AbstractWorkItemOutputType",
+                    "comment" : comment or "Decision submitted via sherpa-py-midpoint library",
+                    "outcome" : f"http://midpoint.evolveum.com/xml/ns/public/model/approval/outcome#{decision}"
+                }
+            }
+            self._http_post(path=f"{cases_endpoint}/{case_oid}/workItems/{str(item_id)}/complete", body=body, expected_status=[204])
+            return {"status": "success", "decision": decision}
+        except Exception as e:
+            return {"status": "error", "decision": decision, "message": str(e)}
+
+
+    def approve_work_item(self, case_oid: str, item_id: int, comment: str = None) -> dict:
+        """
+        Approve a work item.
+        Returns a result dict with success/already_done/error status.
+        """
+        self.logger.debug(f"Approving workItem: {item_id} in case: {case_oid}")
+        return self._decide_work_item(case_oid=case_oid, item_id=item_id, decision="approve", comment=comment)
+
+
+    def reject_work_item(self, case_oid: str, item_id: int, comment: str = None) -> dict:
+        """
+        Reject a work item.
+        """
+        self.logger.debug(f"Rejecting workItem: {item_id} in case: {case_oid}")
+        return self._decide_work_item(case_oid=case_oid, item_id=item_id, decision="reject", comment=comment)
+
+
+    # ###############################################################################
+    # Role
+
+    def get_requestable_roles(self, user_oid: str) -> list[dict]:
+        self.logger.debug(f"Starting")
+        query_payload = {
+            "query": {
+                "filter": { "text": "requestable = true" }
+            }
+        }
+        roles = self._search_objects(object_type="RoleType", query_payload=query_payload)
+        normalized_user = self.get_user(oid=user_oid)
+        member_oids = {m["oid"] for m in normalized_user.get("role_membership", [])}
+        normalized_roles = self._normalize_objects(roles)
+        return [r for r in normalized_roles if r.get("oid") not in member_oids]
+
+
+    def request_role_assignment(self, assignee_type: str, assignee_oid: str, role_oid: str) -> dict:
+        self.logger.debug(f"Starting: assignee_type={assignee_type}, assignee_oid={assignee_oid}, role_oid={role_oid}")
+        request_body = {
+            "objectModification": {
+                "itemDelta": [
+                    {
+                        "modificationType": "add",
+                        "path": "assignment",
+                        "value": [
+                            {
+                                "targetRef": {
+                                    "oid": role_oid,
+                                    "type": "c:RoleType",
+                                    "relation": "org:default",
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        json_resp = self._http_patch(path=self._get_endpoint(assignee_type) + "/" + assignee_oid, body=request_body, expected_status=[204])
+        self.logger.debug(f"json_resp={json_resp}")
+        role_object = self._get_object(object_type="RoleType", object_oid=role_oid)
+        return {"role_name": role_object["name"], "status": "success", "message": "Role requested"}
+
+
+    # ###############################################################################
+    # User
+
+    def get_user(self, oid: str = None, name: str = None) -> dict:
+        object_type = "UserType"
+        self.logger.debug(f"Starting: oid={oid}, name={name}")
+        object = {}
+        if oid is not None:
+            object = self._get_object(object_type=object_type, object_oid=oid)
+        elif name is not None:
+            object = self._search_object_by_name(object_type=object_type, object_name=name)
+        else:
+            raise Exception("Either oid or name must be specified.")
+        self.logger.trace("object: {}", object)
+        if "@type" not in object:
+            object["@type"] = f"c:{object_type}"
+        return self._normalize_object(object)
+
+
 
 
 class Midpoint:
