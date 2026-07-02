@@ -365,7 +365,7 @@ class MidpointClient:
             self.logger.trace("items={}", items)
             if isinstance(items, dict):
                 items = [items]
-            item = next((i for i in items if i.get("@id") == item_id), None)
+            item = next((i for i in items if str(i.get("@id")) == str(item_id)), None)
             self.logger.trace("item={}", item)
             if item is None:
                 return {"status": "not_found", "decision": decision}
