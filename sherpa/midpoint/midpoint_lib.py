@@ -220,6 +220,7 @@ class MidpointClient:
                 for attr in ["state"]:
                     if attr in raw_object:
                         normalized_object[attr]=raw_object[attr]
+                normalized_object["create_timestamp"]=raw_object.get("@metadata", {}).get("storage", {}).get("createTimestamp")
                 for reference in ["object", "target", "requestor"]:
                     reference_key = f"{reference}Ref"
                     if reference_key in raw_object:
@@ -238,9 +239,13 @@ class MidpointClient:
                     if attr in raw_object:
                         normalized_object[attr]=raw_object[attr]
             case "User":
-                for attr in ["givenName", "familyName"]:
+                for attr in ["givenName", "familyName", "fullName", "emailAddress", "title", "personalNumber"]:
                     if attr in raw_object:
                         normalized_object[attr]=raw_object[attr]
+                if "extension" in raw_object:
+                    extension = raw_object["extension"]
+                    for ext_attr in ["metaPersonalEmail"]:
+                        normalized_object[ext_attr] = extension[ext_attr]
                 normalized_object["role_assignment"] = self._normalize_assignments(raw_object.get("assignment", []), "RoleType", "enabled")
                 normalized_object["role_membership"] = self._normalize_object_references(raw_object.get("roleMembershipRef", []), "RoleType")
         return normalized_object
