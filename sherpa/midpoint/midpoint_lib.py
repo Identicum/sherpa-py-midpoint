@@ -72,29 +72,38 @@ def get_object_type_entry(object_class):
     return None
 
 
-def check_sherpa_oid(oid, object_class, expected_customer_id="0000"):
+def check_sherpa_oid(oid: str, object_class: str, expected_customer_id: str = "0000", logger: Logger = None):
     """
     Validate that an oid follows the Sherpa base/customer repo numbering scheme
     for the given object class. Raises ValueError with a descriptive message
     if it doesn't; returns None if it does.
     """
+    if logger is None:
+        logger = Logger("check_sherpa_oid")
     if not oid:
+        logger.error("Object of class {} has no oid.".format(object_class))
         raise ValueError("Object of class {} has no oid.".format(object_class))
     blocks = oid.split("-")
     if len(blocks) != 5:
+        logger.error("oid '{}' does not have the expected 5 blocks.".format(oid))
         raise ValueError("oid '{}' does not have the expected 5 blocks.".format(oid))
     block_a, block_b, block_c, block_d, _block_e = blocks
     if block_a != "00000000":
+        logger.error("oid '{}' block A must be '00000000'.".format(oid))
         raise ValueError("oid '{}' block A must be '00000000'.".format(oid))
     if block_b != IDENTICUM_OID_BLOCK_B:
+        logger.error("oid '{}' block B must be '{}'.".format(oid, IDENTICUM_OID_BLOCK_B))
         raise ValueError("oid '{}' block B must be '{}'.".format(oid, IDENTICUM_OID_BLOCK_B))
     if block_c.lower() != expected_customer_id.lower():
+        logger.error("oid '{}' block C is '{}', expected '{}'.".format(oid, block_c, expected_customer_id))
         raise ValueError("oid '{}' block C is '{}', expected '{}'.".format(oid, block_c, expected_customer_id))
     entry = get_object_type_entry(object_class)
     if entry is None:
+        logger.error("No object_types entry found for class '{}'.".format(object_class))
         raise ValueError("No object_types entry found for class '{}'.".format(object_class))
     expected_block_d = entry["oid_block_d"]
     if expected_block_d is not None and block_d.lower() != expected_block_d.lower():
+        logger.error("oid '{}' block D is '{}', expected '{}' for class '{}'.".format(oid, block_d, expected_block_d, object_class))
         raise ValueError("oid '{}' block D is '{}', expected '{}' for class '{}'.".format(oid, block_d, expected_block_d, object_class))
 
 
