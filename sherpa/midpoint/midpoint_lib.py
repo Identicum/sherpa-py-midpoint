@@ -15,6 +15,7 @@ from importlib.metadata import version
 from sherpa.utils import validators
 from sherpa.utils import http
 from sherpa.utils.basics import Logger
+from sherpa.utils.basics import Properties
 from xml.etree import ElementTree
 
 endpoints = {
@@ -115,8 +116,8 @@ class MidpointError(Exception):
 
 
 class MidpointClient:
-    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = Logger("MidpointClient"), timeout: int = 10, iterations: int = 10, interval: int = 10):
-        self.logger = logger
+    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = None, timeout: int = 10, iterations: int = 10, interval: int = 10):
+        self.logger = logger if logger is not None else Logger("MidpointClient")
         self.logger.debug(f"Midpoint lib version: {version("sherpa-py-midpoint")}")
         self.base_url = mp_baseurl + "/ws/rest"
         self.timeout = timeout
@@ -533,17 +534,17 @@ class MidpointClient:
 
 
 class Midpoint:
-    def __init__(self, mp_baseurl, mp_username, mp_password, properties, logger=Logger("Midpoint"), temp_file_path="/tmp/midpoint_object", iterations=10, interval=10):
-        logger.debug("Midpoint lib version: " + version("sherpa-py-midpoint"))
+    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, properties: Properties, logger: Logger = None, temp_file_path: str = "/tmp/midpoint_object", iterations: int = 10, interval: int = 10):
+        self._logger = logger if logger is not None else Logger("Midpoint")
+        self._logger.debug("Midpoint lib version: " + version("sherpa-py-midpoint"))
         self._baseurl = mp_baseurl
         mp_credentials = "{}:{}".format(mp_username, mp_password)
         self._credentials = base64.b64encode(mp_credentials.encode())
-        self._logger = logger
         self._properties = properties
         self._temp_file_path = temp_file_path
         url = "{}users/00000000-0000-0000-0000-000000000002".format(self._baseurl)
         headers = {'Authorization': 'Basic {}'.format(self._credentials.decode()), 'Content-Type': 'application/xml'}
-        http.wait_for_endpoint(url, iterations, interval, logger, headers)
+        http.wait_for_endpoint(url, iterations, interval, self._logger, headers)
 
 
     def _midpoint_call(self, method, endpoint, oid, payload, content_type='application/xml'):
