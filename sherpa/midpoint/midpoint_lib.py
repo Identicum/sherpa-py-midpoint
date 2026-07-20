@@ -43,6 +43,61 @@ endpoints = {
 }
 
 
+# For detail in OID numbering see: https://github.com/Identicum/sherpa-iga/blob/main/objects/OID.md
+# import_order: Numeric folder prefix (several classes can share a number)
+IDENTICUM_OID_BLOCK_B = "1de4"
+object_types = [
+    {"class": "SystemConfigurationType",           "endpoint": "systemConfigurations",           "import_order": 3, "oid_block_d": None},
+    {"class": "UserType",                          "endpoint": "users",                          "import_order": 7, "oid_block_d": "0001"},
+    {"class": "ResourceType",                      "endpoint": "resources",                      "import_order": 4, "oid_block_d": "0002"},
+    {"class": "RoleType",                          "endpoint": "roles",                          "import_order": 5, "oid_block_d": "0004"},
+    {"class": "ObjectTemplateType",                "endpoint": "objectTemplates",                "import_order": 1, "oid_block_d": "0005"},
+    {"class": "TaskType",                          "endpoint": "tasks",                          "import_order": 8, "oid_block_d": "0007"},
+    {"class": "FunctionLibraryType",               "endpoint": "functionLibraries",              "import_order": 2, "oid_block_d": "0010"},
+    {"class": "ArchetypeType",                     "endpoint": "archetypes",                     "import_order": 2, "oid_block_d": "0011"},
+    {"class": "ValuePolicyType",                   "endpoint": "valuePolicies",                  "import_order": 2, "oid_block_d": "0012"},
+    {"class": "SecurityPolicyType",                "endpoint": "securityPolicies",               "import_order": 2, "oid_block_d": "0012"},
+    {"class": "ObjectCollectionType",              "endpoint": "objectCollections",              "import_order": 5, "oid_block_d": "0013"},
+    {"class": "AccessCertificationDefinitionType", "endpoint": "accessCertificationDefinitions", "import_order": 9, "oid_block_d": "0014"},
+    {"class": "SchemaType",                        "endpoint": "schemas",                        "import_order": 0, "oid_block_d": "0017"},
+    {"class": "ReportType",                        "endpoint": "reports",                        "import_order": 6, "oid_block_d": "0018"},
+]
+
+
+def get_object_type_entry(object_class):
+    """Look up an object_types entry by class name, matching on prefix like the endpoints dict does."""
+    for entry in object_types:
+        if entry["class"].lower().startswith(object_class.lower()):
+            return entry
+    return None
+
+
+def check_sherpa_oid(oid, object_class, expected_customer_id="0000"):
+    """
+    Validate that an oid follows the Sherpa base/customer repo numbering scheme
+    for the given object class. Raises ValueError with a descriptive message
+    if it doesn't; returns None if it does.
+    """
+    if not oid:
+        raise ValueError("Object of class {} has no oid.".format(object_class))
+    blocks = oid.split("-")
+    if len(blocks) != 5:
+        raise ValueError("oid '{}' does not have the expected 5 blocks.".format(oid))
+    block_a, block_b, block_c, block_d, _block_e = blocks
+    if block_a != "00000000":
+        raise ValueError("oid '{}' block A must be '00000000'.".format(oid))
+    if block_b != IDENTICUM_OID_BLOCK_B:
+        raise ValueError("oid '{}' block B must be '{}'.".format(oid, IDENTICUM_OID_BLOCK_B))
+    if block_c.lower() != expected_customer_id.lower():
+        raise ValueError("oid '{}' block C is '{}', expected '{}'.".format(oid, block_c, expected_customer_id))
+    entry = get_object_type_entry(object_class)
+    if entry is None:
+        raise ValueError("No object_types entry found for class '{}'.".format(object_class))
+    expected_block_d = entry["oid_block_d"]
+    if expected_block_d is not None and block_d.lower() != expected_block_d.lower():
+        raise ValueError("oid '{}' block D is '{}', expected '{}' for class '{}'.".format(oid, block_d, expected_block_d, object_class))
+
+
 class MidpointError(Exception):
     """Raised when the Midpoint API returns an unexpected response."""
     def __init__(self, message, status_code=None):
