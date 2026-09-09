@@ -14,7 +14,7 @@ setup(
     author='Identicum',
     author_email='ggallard@identicum.com',
     license='MIT License',
-    install_requires=['requests'],
+    install_requires=['requests', 'pyyaml'],
     packages=['sherpa.midpoint'],
     zip_safe=False,
     python_requires='>=3.0'
