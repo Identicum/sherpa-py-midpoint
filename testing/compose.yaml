@@ -17,10 +17,8 @@ services:
         container_name: midpoint_presetup
         image: ghcr.io/identicum/midpoint_4.10:latest
         pull_policy: always
-        environment:
-            REPO_URL: jdbc:postgresql://db:5432/midpointdb
-            REPO_USER: midpointusr
-            REPO_PASSWORD_FILE: /run/secrets/mp_database_password.txt
+        env_file:
+            - ./midpoint.env
         volumes:
             - ./secrets/:/run/secrets/:ro
         command: "/usr/local/bin/initialize_repository.sh"
@@ -34,13 +32,8 @@ services:
         pull_policy: always
         ports:
             - 8080:8080
-        environment:
-            MP_SET_midpoint_repository_type: native
-            MP_SET_midpoint_repository_jdbcUrl: jdbc:postgresql://db:5432/midpointdb
-            MP_SET_midpoint_repository_jdbcUsername: midpointusr
-            MP_SET_midpoint_repository_jdbcPassword_FILE: /run/secrets/mp_database_password.txt
-            MP_SET_midpoint_keystore_keyStorePassword_FILE: /run/secrets/mp_keystore_password.txt
-            MP_SET_midpoint_administrator_initialPassword: Sherpa.2026
+        env_file:
+            - ./midpoint.env
         volumes:
             - ./secrets/:/run/secrets/:ro
         depends_on:
