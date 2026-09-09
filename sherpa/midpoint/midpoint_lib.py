@@ -11,6 +11,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 import shutil
 import time
+import yaml
 from importlib.metadata import version
 from sherpa.utils import validators
 from sherpa.utils import http
@@ -18,73 +19,52 @@ from sherpa.utils.basics import Logger
 from sherpa.utils.basics import Properties
 from xml.etree import ElementTree
 
-endpoints = {
-    "AccessCertificationDefinitionType": "accessCertificationDefinitions",
-    "ArchetypeType": "archetypes",
-    "CaseType": "cases",
-    "ConnectorHostType": "connectorHosts",
-    "ConnectorType": "connectors",
-    "DashboardType": "dashboards",
-    "FormType": "forms",
-    "FunctionLibraryType": "functionLibraries",
-    "GenericObjectType": "genericObjects",
-    "ObjectCollectionType": "objectCollections",
-    "ObjectTemplateType": "objectTemplates",
-    "OrgType": "orgs",
-    "ReportType": "reports",
-    "ResourceType": "resources",
-    "RoleType": "roles",
-    "SchemaType": "schemas",
-    "SecurityPolicyType": "securityPolicies",
-    "ShadowType": "shadows",
-    "SystemConfigurationType": "systemConfigurations",
-    "TaskType": "tasks",
-    "UserType": "users",
-    "ValuePolicyType": "valuePolicies"
-}
-
-
 # For detail in OID numbering see: https://github.com/Identicum/sherpa-iga/blob/main/objects/OID.md
 # import_order: Numeric folder prefix (several classes can share a number)
 # Block A = IDENTICUM_OID_MARKER + 4-hex customer id ("0000" for base Sherpa objects).
 IDENTICUM_OID_MARKER = "1de4"
 object_types = [
-    {"class": "SystemConfigurationType",           "endpoint": "systemConfigurations",           "import_order": 3, "oid_block_b": None},
-    {"class": "UserType",                          "endpoint": "users",                          "import_order": 7, "oid_block_b": "0001"},
-    {"class": "ResourceType",                      "endpoint": "resources",                      "import_order": 4, "oid_block_b": "0002"},
-    {"class": "RoleType",                          "endpoint": "roles",                          "import_order": 5, "oid_block_b": "0004"},
-    {"class": "ObjectTemplateType",                "endpoint": "objectTemplates",                "import_order": 1, "oid_block_b": "0005"},
-    {"class": "TaskType",                          "endpoint": "tasks",                          "import_order": 8, "oid_block_b": "0007"},
-    {"class": "FunctionLibraryType",               "endpoint": "functionLibraries",              "import_order": 2, "oid_block_b": "0010"},
-    {"class": "ArchetypeType",                     "endpoint": "archetypes",                     "import_order": 2, "oid_block_b": "0011"},
-    {"class": "ValuePolicyType",                   "endpoint": "valuePolicies",                  "import_order": 2, "oid_block_b": "0012"},
-    {"class": "SecurityPolicyType",                "endpoint": "securityPolicies",               "import_order": 2, "oid_block_b": "0012"},
-    {"class": "ObjectCollectionType",              "endpoint": "objectCollections",              "import_order": 5, "oid_block_b": "0013"},
-    {"class": "AccessCertificationDefinitionType", "endpoint": "accessCertificationDefinitions", "import_order": 9, "oid_block_b": "0014"},
-    {"class": "SchemaType",                        "endpoint": "schemas",                        "import_order": 0, "oid_block_b": "0017"},
-    {"class": "ReportType",                        "endpoint": "reports",                        "import_order": 6, "oid_block_b": "0018"},
+    {"type": "SystemConfigurationType",           "element_name": "systemConfiguration",           "endpoint": "systemConfigurations",           "import_order": 3, "oid_block_b": None},
+    {"type": "UserType",                          "element_name": "user",                          "endpoint": "users",                          "import_order": 7, "oid_block_b": "0001"},
+    {"type": "ResourceType",                      "element_name": "resource",                      "endpoint": "resources",                      "import_order": 4, "oid_block_b": "0002"},
+    {"type": "RoleType",                          "element_name": "role",                          "endpoint": "roles",                          "import_order": 5, "oid_block_b": "0004"},
+    {"type": "ObjectTemplateType",                "element_name": "objectTemplate",                "endpoint": "objectTemplates",                "import_order": 1, "oid_block_b": "0005"},
+    {"type": "TaskType",                          "element_name": "task",                          "endpoint": "tasks",                          "import_order": 8, "oid_block_b": "0007"},
+    {"type": "FunctionLibraryType",               "element_name": "functionLibrary",               "endpoint": "functionLibraries",              "import_order": 2, "oid_block_b": "0010"},
+    {"type": "ArchetypeType",                     "element_name": "archetype",                     "endpoint": "archetypes",                     "import_order": 2, "oid_block_b": "0011"},
+    {"type": "ValuePolicyType",                   "element_name": "valuePolicy",                   "endpoint": "valuePolicies",                  "import_order": 2, "oid_block_b": "0012"},
+    {"type": "SecurityPolicyType",                "element_name": "securityPolicy",                "endpoint": "securityPolicies",               "import_order": 2, "oid_block_b": "0012"},
+    {"type": "ObjectCollectionType",              "element_name": "objectCollection",              "endpoint": "objectCollections",              "import_order": 5, "oid_block_b": "0013"},
+    {"type": "AccessCertificationDefinitionType", "element_name": "accessCertificationDefinition", "endpoint": "accessCertificationDefinitions", 'import_order': 9, 'oid_block_b': '0014'},
+    {"type": "FormType",                          "element_name": "form",                          "endpoint": "forms",                          "import_order": 5, "oid_block_b": "0015"},
+    {"type": 'SchemaType',                        'element_name': 'schema',                        'endpoint': 'schemas',                        'import_order': 0, 'oid_block_b': '0017'},
+    {"type": 'ReportType',                        'element_name': 'report',                        'endpoint': 'reports',                        'import_order': 6, 'oid_block_b': '0018'},
 ]
 
+CONTENT_TYPE_XML = "application/xml"
+CONTENT_TYPE_JSON = "application/json"
+CONTENT_TYPE_YAML = "application/yaml"
 
-def get_object_type_entry(object_class):
-    """Look up an object_types entry by class name, matching on prefix like the endpoints dict does."""
+
+def get_object_type_entry(element_name: str) -> dict:
+    """Look up an object_types entry by element name (e.g. 'user')."""
     for entry in object_types:
-        if entry["class"].lower().startswith(object_class.lower()):
+        if entry["element_name"] == element_name:
             return entry
-    return None
+    raise ValueError("No object_types entry found for '{}'.".format(element_name))
 
 
-def check_sherpa_oid(oid: str, object_class: str, expected_customer_id: str = "0000", logger: Logger = None):
+def check_sherpa_oid(oid: str, element_name: str, expected_customer_id: str = "0000", logger: Logger = None):
     """
     Validate that an oid follows the Sherpa base/customer repo numbering scheme
-    for the given object class. Raises ValueError with a descriptive message
+    for the given object type (element_name). Raises ValueError with a descriptive message
     if it doesn't; returns None if it does.
     """
     if logger is None:
         logger = Logger("check_sherpa_oid")
     if not oid:
-        logger.error("Object of class {} has no oid.".format(object_class))
-        raise ValueError("Object of class {} has no oid.".format(object_class))
+        logger.error("Object of type {} has no oid.".format(element_name))
+        raise ValueError("Object of type {} has no oid.".format(element_name))
     blocks = oid.split("-")
     if len(blocks) != 5:
         logger.error("oid '{}' does not have the expected 5 blocks.".format(oid))
@@ -94,14 +74,11 @@ def check_sherpa_oid(oid: str, object_class: str, expected_customer_id: str = "0
     if block_a.lower() != expected_block_a.lower():
         logger.error("oid '{}' block A is '{}', expected '{}'.".format(oid, block_a, expected_block_a))
         raise ValueError("oid '{}' block A is '{}', expected '{}'.".format(oid, block_a, expected_block_a))
-    entry = get_object_type_entry(object_class)
-    if entry is None:
-        logger.error("No object_types entry found for class '{}'.".format(object_class))
-        raise ValueError("No object_types entry found for class '{}'.".format(object_class))
+    entry = get_object_type_entry(element_name)
     expected_block_b = entry["oid_block_b"]
     if expected_block_b is not None and block_b.lower() != expected_block_b.lower():
-        logger.error("oid '{}' block B is '{}', expected '{}' for class '{}'.".format(oid, block_b, expected_block_b, object_class))
-        raise ValueError("oid '{}' block B is '{}', expected '{}' for class '{}'.".format(oid, block_b, expected_block_b, object_class))
+        logger.error("oid '{}' block B is '{}', expected '{}' for type '{}'.".format(oid, block_b, expected_block_b, element_name))
+        raise ValueError("oid '{}' block B is '{}', expected '{}' for type '{}'.".format(oid, block_b, expected_block_b, element_name))
 
 
 class MidpointError(Exception):
@@ -112,33 +89,57 @@ class MidpointError(Exception):
 
 
 class MidpointClient:
-    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = None, timeout: int = 10, iterations: int = 10, interval: int = 10):
+    def __init__(self, mp_baseurl: str, mp_username: str, mp_password: str, on_behalf: str = None, logger: Logger = None, properties: Properties = None, timeout: int = 10, iterations: int = 10, interval: int = 10, temp_file_path: str = "/tmp/midpoint_object"):
         self.logger = logger if logger is not None else Logger("MidpointClient")
         self.logger.debug(f"Midpoint lib version: {version("sherpa-py-midpoint")}")
+        self.properties = properties
         self.base_url = mp_baseurl + "/ws/rest"
         self.timeout = timeout
         self.auth = HTTPBasicAuth(mp_username, mp_password)
         self.session = requests.Session()
         self.session.auth = self.auth
         self.session.headers.update({
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": CONTENT_TYPE_JSON
         })
         if on_behalf is not None:
             self.session.headers["Switch-To-Principal"] = on_behalf
 
-
         mp_credentials = f"{mp_username}:{mp_password}"
         self._credentials = base64.b64encode(mp_credentials.encode())
         url = f"{self.base_url}/users/00000000-0000-0000-0000-000000000002"
-        headers = {'Authorization': f'Basic {self._credentials.decode()}', 'Content-Type': 'application/xml'}
+        headers = {'Authorization': f'Basic {self._credentials.decode()}', 'Content-Type': CONTENT_TYPE_XML}
         http.wait_for_endpoint(url, iterations, interval, logger, headers)
+        self.temp_file_path = temp_file_path
 
 
-    def _get_endpoint(self, object_type: str) -> str:
-        if object_type in endpoints:
-            return "/" + endpoints[object_type]
-        raise AttributeError("Can't find REST type for class " + object_type)
+    def _get_endpoint_from_document(self, payload: str, content_type: str) -> str:
+        self.logger.trace("Starting")
+        element_name = self._get_element_name_from_document(payload=payload, content_type=content_type)
+        object_type_entry = get_object_type_entry(element_name=element_name)
+        if object_type_entry is not None:
+            return object_type_entry["endpoint"]
+        else:
+            raise ValueError("No object_types entry found for element_name '{}'.".format(element_name))
+
+
+    def _get_oid_from_document(self, payload: str, content_type: str) -> str:
+        self.logger.trace("Starting")
+        if content_type == CONTENT_TYPE_XML:
+            tree_root = ElementTree.fromstring(payload)
+            return tree_root.attrib['oid']
+        else:
+            self.logger.error("Content type is unhandled: {}.", content_type)
+
+
+    def _get_element_name_from_document(self, payload: str, content_type: str) -> str:
+        self.logger.trace("Starting")
+        if content_type == CONTENT_TYPE_XML:
+            tree_root = ElementTree.fromstring(payload)
+            # remove namespace
+            object_type = tree_root.tag.split('}', 1)[1] if '}' in tree_root.tag else tree_root.tag
+            return object_type
+        else:
+            self.logger.error("Content type is unhandled: {}.", content_type)
 
 
     def _http_get(self, path: str, params: dict = None, expected_status: list[int] = [200]) -> dict:
@@ -151,10 +152,14 @@ class MidpointClient:
         return resp.json()
 
 
-    def _http_patch(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
+    def _http_patch(self, path: str, body=None, expected_status: list[int] = [200], content_type: str = CONTENT_TYPE_JSON) -> dict:
         url = self.base_url + path
-        self.logger.debug(f"PATCH {url} body={body}")
-        resp = self.session.patch(url, json=body, timeout=self.timeout)
+        self.logger.debug(f"PATCH {url} body={body} content_type={content_type}")
+        headers = {"Content-Type": content_type}
+        if content_type == CONTENT_TYPE_JSON:
+            resp = self.session.patch(url, json=body, headers=headers, timeout=self.timeout)
+        else:
+            resp = self.session.patch(url, data=body, headers=headers, timeout=self.timeout)
         self.logger.trace(f"PATCH {url} -> status={resp.status_code} body={resp.text}")
         if resp.status_code not in expected_status:
             validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
@@ -163,10 +168,30 @@ class MidpointClient:
         return resp.json()
 
 
-    def _http_post(self, path: str, body: dict = None, expected_status: list[int] = [200]) -> dict:
+    def _http_put(self, path: str, body=None, expected_status: list[int] = [201,202], content_type: str = CONTENT_TYPE_JSON) -> dict:
         url = self.base_url + path
-        self.logger.debug(f"POST {url}, body={body}, headers={self.session.headers}")
-        resp = self.session.post(url, json=body, timeout=self.timeout)
+        self.logger.debug(f"PUT {url} body={body} content_type={content_type}")
+        headers = {"Content-Type": content_type}
+        if content_type == CONTENT_TYPE_JSON:
+            resp = self.session.put(url, json=body, headers=headers, timeout=self.timeout)
+        else:
+            resp = self.session.put(url, data=body, headers=headers, timeout=self.timeout)
+        self.logger.trace(f"PUT {url} -> status={resp.status_code} body={resp.text}")
+        if resp.status_code not in expected_status:
+            validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
+        if not resp.text:
+            return {}
+        return resp.json()
+
+
+    def _http_post(self, path: str, body=None, expected_status: list[int] = [200], content_type: str = CONTENT_TYPE_JSON) -> dict:
+        url = self.base_url + path
+        self.logger.debug(f"POST {url}, body={body}, content_type={content_type}, headers={self.session.headers}")
+        headers = {"Content-Type": content_type}
+        if content_type == CONTENT_TYPE_JSON:
+            resp = self.session.post(url, json=body, headers=headers, timeout=self.timeout)
+        else:
+            resp = self.session.post(url, data=body, headers=headers, timeout=self.timeout)
         self.logger.trace(f"POST {url} -> status={resp.status_code} body={resp.text}")
         if resp.status_code not in expected_status:
             validators.raise_and_log(self.logger, IOError, f"Invalid HTTP response received: '{resp.status_code}'.")
@@ -384,6 +409,91 @@ class MidpointClient:
 
 
     # ###############################################################################
+    # Importers
+
+    def process_subfolders(self, subfolder_path: str):
+        if not os.path.exists(subfolder_path):
+            self.logger.error("Folder not found: {}.", subfolder_path)
+            return
+        self.logger.debug("Processing dir: {}.", subfolder_path)
+        for object_type_folder in sorted(os.scandir(subfolder_path), key=lambda path: path.name):
+            if object_type_folder.is_dir():
+                self.process_folder(folder_path=object_type_folder.path)
+
+
+    def process_folder(self, folder_path: str):
+        self.logger.debug("Processing dir: {}.", folder_path)
+        if not os.path.exists(folder_path):
+            self.logger.error("Folder not found: {}.", folder_path)
+            return
+        for file in sorted(os.scandir(folder_path), key=lambda path: path.name):
+            if file.is_file():
+                self._process_file(file=file)
+
+
+    def _process_file(self, file: str):
+        if not os.path.exists(file):
+            self.logger.error("File not found: {}.", file)
+            return
+
+        if file.path.endswith(".xml"):
+            self.logger.debug("Processing file: {}.", file.name)
+            shutil.copyfile(file.path, self.temp_file_path)
+            self.properties.replace(self.temp_file_path)
+            self._put_object_from_file(path=self.temp_file_path, content_type=CONTENT_TYPE_XML)
+            return
+
+        if file.is_file() and file.path.endswith(".json"):
+            self.logger.debug("Processing file: {}.".format(file.path))
+            validators.raise_and_log(self.logger, MidpointError, "JSON Implementation pending.")
+
+        if file.is_file() and file.path.endswith(".yaml"):
+            self.logger.debug("Processing file: {}.".format(file.path))
+            shutil.copyfile(file.path, self.temp_file_path)
+            self.properties.replace(self.temp_file_path)
+            with open(self.temp_file_path) as f:
+                yaml_data = yaml.safe_load(f)
+            if isinstance(yaml_data, dict):
+                self.logger.trace("Processing operation in YAML (dict): {}".format(yaml_data))
+                self._process_operation(yaml_data)
+            if isinstance(yaml_data, list):
+                self.logger.trace("Processing each operation in YAML (list): {}".format(yaml_data))
+                for operation in yaml_data:
+                    self._process_operation(operation)
+            return
+
+        validators.raise_and_log(self.logger, MidpointError, "Unknown file type: {}.".format(file.path))
+
+
+    def _put_object_from_file(self, path: str, content_type: str) -> dict:
+        self.logger.trace("Starting")
+        payload = ""
+        with open(path, "r") as file_object:
+            payload = file_object.read()
+            file_object.close()
+        response = self._put_object(payload=payload, content_type=content_type)
+        return response
+
+
+    def _put_object(self, payload: str, content_type: str) -> dict:
+        self.logger.trace("Starting")
+        endpoint = self._get_endpoint_from_document(payload=payload, content_type=content_type)
+        oid = self._get_oid_from_document(payload=payload, content_type=content_type)
+        path = "/" + endpoint + "/" + oid
+        response = self._http_put(path=path, body=payload, content_type=content_type)
+        return response
+
+
+    def _process_operation(self, json_data):
+        self.logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
+        match json_data["operation_type"]:
+            case "request_role_assignment":
+                self.request_role_assignment(assignee_type=json_data.get('assignee_type'), assignee_oid=json_data.get('assignee_oid'), role_oid=json_data.get('role_oid'))
+            case _:
+                validators.raise_and_log(self.logger, MidpointError, "OperationType is unknown: {}".format(json_data["operation_type"]))
+
+
+    # ###############################################################################
     # Case
 
     def get_requested_cases(self, requestor_oid: str) -> list[dict]:
@@ -539,11 +649,11 @@ class Midpoint:
         self._properties = properties
         self._temp_file_path = temp_file_path
         url = "{}users/00000000-0000-0000-0000-000000000002".format(self._baseurl)
-        headers = {'Authorization': 'Basic {}'.format(self._credentials.decode()), 'Content-Type': 'application/xml'}
+        headers = {'Authorization': 'Basic {}'.format(self._credentials.decode()), 'Content-Type': CONTENT_TYPE_XML}
         http.wait_for_endpoint(url, iterations, interval, self._logger, headers)
 
 
-    def _midpoint_call(self, method, endpoint, oid, payload, content_type='application/xml'):
+    def _midpoint_call(self, method, endpoint, oid, payload, content_type=CONTENT_TYPE_XML):
         url = self._baseurl + endpoint
         if method=="GET" or method=="PATCH" or method=="PUT":
             url = url + "/" + oid
@@ -564,11 +674,9 @@ class Midpoint:
         return response
 
 
-    def _get_endpoint(self, object_type):
-        for endpoint_class, endpoint_rest in endpoints.items():
-            if endpoint_class.lower().startswith(object_type.lower()):
-                return endpoint_rest
-        raise AttributeError("Can't find REST type for class " + object_type)
+    def _get_endpoint(self, element_name: str):
+        object_type_entry = get_object_type_entry(element_name=element_name)
+        return object_type_entry["endpoint"]
 
 
     def _get_oid_from_document(self, xml_data):
@@ -875,7 +983,7 @@ class Midpoint:
                     </itemDelta>
                 </objectModification>""".format(modification_type, path, value)
         self._logger.trace("Object modification: {}", xml_data)
-        endpoint = self._get_endpoint("SystemConfigurationType")
+        endpoint = self._get_endpoint("systemConfiguration")
         response = self.patch_object(xml_data, endpoint, "00000000-0000-0000-0000-000000000001")
         return response
 
@@ -1063,7 +1171,7 @@ class Midpoint:
                         }}
                     }}
                 }}""".format(value)
-        response = self._midpoint_call("PATCH", endpoint, object_oid, json_data, content_type='application/json')
+        response = self._midpoint_call("PATCH", endpoint, object_oid, json_data, content_type=CONTENT_TYPE_JSON)
         return response
 
 

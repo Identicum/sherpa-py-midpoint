@@ -7,7 +7,7 @@ from sherpa.utils.basics import Logger
 from sherpa.utils.basics import Properties
 
 sys.path.insert(0, './sherpa/')
-from midpoint.midpoint_lib import Midpoint
+from midpoint.midpoint_lib import MidpointClient, Midpoint
 
 
 def main():
@@ -19,9 +19,14 @@ def main():
 
 def run(logger, properties):
 	logger.info("{} starting.".format(os.path.basename(__file__)))
-	mp_baseurl = "http://midpoint:8080/midpoint/ws/rest/"
-	midpoint = Midpoint(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Sherpa.2026", properties=properties, logger=logger)
-	midpoint.process_subfolders("./testing/objects")
+
+	# mp_baseurl = "http://midpoint:8080/midpoint/ws/rest/"
+	# midpoint = Midpoint(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Sherpa.2026", properties=properties, logger=logger)
+	# midpoint.process_subfolders("./testing/objects")
+
+	mp_baseurl = "http://midpoint:8080/midpoint"
+	midpoint_admin = MidpointClient(mp_baseurl=mp_baseurl, mp_username="administrator", mp_password="Sherpa.2026", logger=logger, properties=properties)
+	midpoint_admin.process_subfolders("./testing/objects")
 
 
 if __name__ == "__main__":
