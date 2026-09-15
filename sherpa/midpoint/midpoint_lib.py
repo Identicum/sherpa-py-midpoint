@@ -854,17 +854,21 @@ class MidpointClient:
     def _process_operation(self, json_data):
         self.logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
         match json_data["operation_type"]:
-            case "add_role_inducement_to_archetype":
-                archetype_oid = self._resolve_oid(object_type="ArchetypeType", oid=json_data.get('archetype_oid'), name=json_data.get('archetype_name'))
-                self.request_role_inducement(assignee_type="ArchetypeType", assignee_oid=archetype_oid, role_oid=json_data.get('role_oid'))
-            case "add_role_inducement_to_role":
-                assignee_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('child_oid'), name=json_data.get('child_name'))
-                role_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('parent_oid'), name=json_data.get('parent_name'))
-                self.request_role_inducement(assignee_type="RoleType", assignee_oid=assignee_oid, role_oid=role_oid)
             case "add_resource_inducement_to_role":
                 self.add_resource_inducement_to_role(resource_oid=json_data.get('resource_oid'), resource_name=json_data.get('resource_name'), role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'))
             case "add_role_assignment_to_user":
                 self.add_role_assignment_to_user(role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'), user_oid=json_data.get('user_oid'), user_name=json_data.get('user_name'))
+            case "add_role_inducement_to_archetype":
+                archetype_oid = self._resolve_oid(object_type="ArchetypeType", oid=json_data.get('archetype_oid'), name=json_data.get('archetype_name'))
+                self.request_role_inducement(assignee_type="ArchetypeType", assignee_oid=archetype_oid, role_oid=json_data.get('role_oid'))
+            case "add_role_inducement_to_role":
+                assignee_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('assignee_oid'), name=json_data.get('assignee_name'))
+                role_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('role_oid'), name=json_data.get('role_name'))
+                self.request_role_inducement(assignee_type="RoleType", assignee_oid=assignee_oid, role_oid=role_oid)
+            case "run_task":
+                self.run_task(task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
+                if json_data.get('wait_for_completion', False):
+                    self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
             case "set_system_configuration":
                 self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
             case "set_class_logger":
