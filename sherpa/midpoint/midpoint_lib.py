@@ -873,5 +873,7 @@ class MidpointClient:
                 self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
             case "set_class_logger":
                 self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
+            case "wait_for_completed_task":
+                self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
             case _:
                 validators.raise_and_log(self.logger, MidpointError, "OperationType is unknown: {}".format(json_data["operation_type"]))
