@@ -389,8 +389,7 @@ class MidpointClient:
         return system_configuration_object
 
 
-    # This should be deprecated in favor of specific methods like set_class_logger, etc.
-    def set_system_configuration(self, modification_type: str, path: str, value) -> dict:
+    def _set_system_configuration(self, modification_type: str, path: str, value) -> dict:
         self.logger.debug(f"Starting: modification_type={modification_type}, path={path}, value={value}")
         request_body = {
             "objectModification": {
@@ -408,6 +407,23 @@ class MidpointClient:
         return {"status": "success", "message": "System configuration updated"}
 
 
+    def set_security_policy(self, oid=None, name=None):
+        resolved_policy_oid = self._resolve_oid(object_type="ResourceType", oid=oid, name=name)
+        self._set_system_configuration(modification_type="REPLACE", path="globalSecurityPolicyRef", value={"oid" : resolved_policy_oid})
+
+
+    def set_organization_name(self, name: str):
+        self._set_system_configuration(modification_type="REPLACE", path="c:deploymentInformation/c:name", value=name)
+
+
+    def set_rolemanagement_autoassign(self, value: bool):
+        self._set_system_configuration(modification_type="REPLACE", path="c:roleManagement/c:autoassignEnabled", value=value)
+
+
+    def set_deploymentinformation_skin(self, value: str):
+        self._set_system_configuration(modification_type="REPLACE", path="c:deploymentInformation/c:skin", value=value)
+
+
     # ###############################################################################
     # Logging
 
@@ -423,12 +439,12 @@ class MidpointClient:
 
     def replace_class_logger(self, id: str, level: str) -> dict:
         path = f"logging/classLogger[{id}]/level"
-        return self.set_system_configuration(modification_type="replace", path=path, value=level)
+        return self._set_system_configuration(modification_type="replace", path=path, value=level)
 
 
     def add_class_logger(self, package: str, level: str) -> dict:
         value = [{"package": package, "level": level}]
-        return self.set_system_configuration(modification_type="add", path="logging/classLogger", value=value)
+        return self._set_system_configuration(modification_type="add", path="logging/classLogger", value=value)
 
 
     def set_class_logger(self, package: str, level: str) -> dict:
