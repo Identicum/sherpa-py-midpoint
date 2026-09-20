@@ -621,11 +621,7 @@ class MidpointClient:
     def _get_endpoint_from_document(self, payload: str, content_type: str) -> str:
         self.logger.trace("Starting")
         element_name = self._get_element_name_from_document(payload=payload, content_type=content_type)
-        object_type_entry = get_object_type_entry(element_name=element_name)
-        if object_type_entry is not None:
-            return object_type_entry["endpoint"]
-        else:
-            validators.raise_and_log(self.logger, ValueError, f"No object_types entry found for element_name '{element_name}'.")
+        return self._get_endpoint_from_element(element_name=element_name)
 
 
     def _get_oid_from_document(self, payload: str, content_type: str) -> str:
@@ -826,20 +822,18 @@ class MidpointClient:
         if not os.path.exists(file):
             self.logger.error("File not found: {}.", file)
             return
+        self.logger.debug("Processing file: {}.".format(file.path))
 
         if file.path.endswith(".xml"):
-            self.logger.debug("Processing file: {}.", file.name)
             shutil.copyfile(file.path, self.temp_file_path)
             self.properties.replace(self.temp_file_path)
             self._put_object_from_file(path=self.temp_file_path, content_type=CONTENT_TYPE_XML)
             return
 
         if file.is_file() and file.path.endswith(".json"):
-            self.logger.debug("Processing file: {}.".format(file.path))
             validators.raise_and_log(self.logger, MidpointError, "JSON Implementation pending.")
 
         if file.is_file() and file.path.endswith(".yaml"):
-            self.logger.debug("Processing file: {}.".format(file.path))
             shutil.copyfile(file.path, self.temp_file_path)
             self.properties.replace(self.temp_file_path)
             with open(self.temp_file_path) as f:
