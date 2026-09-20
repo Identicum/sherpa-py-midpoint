@@ -269,6 +269,22 @@ class MidpointClient:
         return {"role_name": result["target_name"], "status": result["status"], "message": "Role assigned"}
 
 
+    def add_role_inducement_to_archetype(self, role_oid: str = None, role_name: str = None, archetype_oid: str = None, archetype_name: str = None) -> dict:
+        self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, archetype_oid={archetype_oid}, archetype_name={archetype_name}")
+        resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
+        resolved_archetype_oid = self._resolve_oid(object_type="ArchetypeType", oid=archetype_oid, name=archetype_name)
+        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="ArchetypeType", assignee_oid=resolved_archetype_oid, target_type="RoleType", target_oid=resolved_role_oid)
+        return {"role_name": result["target_name"], "status": result["status"], "message": "Role induced to archetype"}
+
+
+    def add_role_inducement_to_role(self, role_oid: str = None, role_name: str = None, assignee_oid: str = None, assignee_name: str = None) -> dict:
+        self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, assignee_oid={assignee_oid}, assignee_name={assignee_name}")
+        resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
+        resolved_assignee_oid = self._resolve_oid(object_type="ArchetypeType", oid=assignee_oid, name=assignee_name)
+        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_assignee_oid, target_type="RoleType", target_oid=resolved_role_oid)
+        return {"role_name": result["target_name"], "status": result["status"], "message": "Role induced to role"}
+
+
     def set_role_requestable(self, role_name: str, value: bool) -> dict:
         self.logger.debug(f"Starting: role_name={role_name}, value={value}")
         resolved_role_oid = self._resolve_oid(object_type="RoleType", name=role_name)
@@ -322,13 +338,21 @@ class MidpointClient:
         return self._task_action(action="resume", task_oid=task_oid, task_name=task_name)
 
 
-    def run_task(self, task_oid: str = None, task_name: str = None) -> dict:
+    def run_task(self, task_oid: str = None, task_name: str = None, wait_for_completion: bool = False) -> dict:
+        self.logger.debug(f"Waiting for task prior to execution: task_oid={task_oid}, task_name={task_name}")
+        self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=task_oid, task_name=task_name)
         self.logger.debug(f"Running task: task_oid={task_oid}, task_name={task_name}")
-        return self._task_action(action="run", task_oid=task_oid, task_name=task_name)
+        result = self._task_action(action="run", task_oid=task_oid, task_name=task_name)
+        if wait_for_completion:
+            self.logger.debug(f"Waiting for task POST execution: task_oid={task_oid}, task_name={task_name}")
+            self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=task_oid, task_name=task_name)
+        return result
 
 
-    def wait_for_completed_task(self, iterations: int, interval: int, task_oid: str = None, task_name: str = None) -> dict:
+    def wait_for_completed_task(self, task_oid: str = None, task_name: str = None, iterations: int = None, interval: int = None) -> dict:
         self.logger.debug(f"Waiting for task to complete: task_oid={task_oid}, task_name={task_name}")
+        iterations = iterations if iterations is not None else self._iterations
+        interval = interval if interval is not None else self._interval
         resolved_oid = self._resolve_oid(object_type="TaskType", oid=task_oid, name=task_name)
         task_completed = False
         for iteration in range(iterations):
@@ -852,28 +876,12 @@ class MidpointClient:
 
 
     def _process_operation(self, json_data):
-        self.logger.trace("Processing operation based on operation_type: {}".format(json_data.get('operation_type')))
-        match json_data["operation_type"]:
-            case "add_resource_inducement_to_role":
-                self.add_resource_inducement_to_role(resource_oid=json_data.get('resource_oid'), resource_name=json_data.get('resource_name'), role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'))
-            case "add_role_assignment_to_user":
-                self.add_role_assignment_to_user(role_oid=json_data.get('role_oid'), role_name=json_data.get('role_name'), user_oid=json_data.get('user_oid'), user_name=json_data.get('user_name'))
-            case "add_role_inducement_to_archetype":
-                archetype_oid = self._resolve_oid(object_type="ArchetypeType", oid=json_data.get('archetype_oid'), name=json_data.get('archetype_name'))
-                self.request_role_inducement(assignee_type="ArchetypeType", assignee_oid=archetype_oid, role_oid=json_data.get('role_oid'))
-            case "add_role_inducement_to_role":
-                assignee_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('assignee_oid'), name=json_data.get('assignee_name'))
-                role_oid = self._resolve_oid(object_type="RoleType", oid=json_data.get('role_oid'), name=json_data.get('role_name'))
-                self.request_role_inducement(assignee_type="RoleType", assignee_oid=assignee_oid, role_oid=role_oid)
-            case "run_task":
-                self.run_task(task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
-                if json_data.get('wait_for_completion', False):
-                    self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
-            case "set_system_configuration":
-                self.set_system_configuration(modification_type=json_data.get('modification_type'), path=json_data.get('path'), value=json_data.get('value'))
-            case "set_class_logger":
-                self.set_class_logger(package=json_data.get('package'), level=json_data.get('level'))
-            case "wait_for_completed_task":
-                self.wait_for_completed_task(iterations=self._iterations, interval=self._interval, task_oid=json_data.get('task_oid'), task_name=json_data.get('task_name'))
-            case _:
-                validators.raise_and_log(self.logger, MidpointError, "OperationType is unknown: {}".format(json_data["operation_type"]))
+        operation_type = json_data.get('operation_type')
+        self.logger.trace("Processing operation based on operation_type: {}".format(operation_type))
+        if operation_type.startswith("_"):
+            validators.raise_and_log(self.logger, MidpointError, "OperationType is not allowed (internal method): {}".format(operation_type))
+        operation_function = getattr(self, operation_type, None)
+        if not callable(operation_function):
+            validators.raise_and_log(self.logger, MidpointError, "OperationType is unknown: {}".format(operation_type))
+        operation_kwargs = {key: value for key, value in json_data.items() if key != 'operation_type'}
+        operation_function(**operation_kwargs)
