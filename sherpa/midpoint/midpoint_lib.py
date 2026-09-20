@@ -872,6 +872,10 @@ class MidpointClient:
         oid = self._get_oid_from_document(payload=payload, content_type=content_type)
         path = endpoint + "/" + oid
         response = self._http_put(path=path, body=payload, content_type=content_type)
+        element_name = self._get_element_name_from_document(payload=payload, content_type=content_type)
+        if element_name == "task":
+            self.logger.debug("Waiting for task to complete: oid={}".format(oid))
+            self.wait_for_completed_task(task_oid=oid)
         return response
 
 
