@@ -45,6 +45,11 @@ CONTENT_TYPE_XML = "application/xml"
 CONTENT_TYPE_JSON = "application/json"
 CONTENT_TYPE_YAML = "application/yaml"
 
+RELATION_TYPE_DEFAULT = "default"
+RELATION_TYPE_MANAGER = "manager"
+RELATION_TYPE_APPROVER = "approver"
+RELATION_TYPE_OWNER = "owner"
+
 
 def get_object_type_entry(type: str = None, element_name: str = None) -> dict:
     """Look up an object_types entry by type (e.g. 'UserType') or element name (e.g. 'user')."""
@@ -213,8 +218,10 @@ class MidpointClient:
         return [r for r in normalized_roles if r.get("oid") not in member_oids]
 
 
-    def _add_assignment_or_inducement(self, relationship: str, assignee_type: str, assignee_oid: str, target_type: str, target_oid: str) -> dict:
-        self.logger.debug(f"Starting: relationship={relationship}, assignee_type={assignee_type}, assignee_oid={assignee_oid}, target_type={target_type}, target_oid={target_oid}")
+    def _add_assignment_or_inducement(self, relationship: str, assignee_type: str, assignee_oid: str, target_type: str, target_oid: str, relation_type: str) -> dict:
+        self.logger.debug(f"Starting: relationship={relationship}, assignee_type={assignee_type}, assignee_oid={assignee_oid}, target_type={target_type}, target_oid={target_oid}, relation_type={relation_type}")
+        if relation_type not in [RELATION_TYPE_DEFAULT, RELATION_TYPE_MANAGER, RELATION_TYPE_APPROVER, RELATION_TYPE_OWNER]:
+            validators.raise_and_log(self.logger, MidpointError, f"Invalid relation type: {relation_type}")
         request_body = {
             "objectModification": {
                 "itemDelta": [
@@ -226,7 +233,7 @@ class MidpointClient:
                                 "targetRef": {
                                     "oid": target_oid,
                                     "type": f"c:{target_type}",
-                                    "relation": "org:default",
+                                    "relation": f"org:{relation_type}",
                                 }
                             }
                         ]
@@ -241,7 +248,7 @@ class MidpointClient:
 
 
     def _request_role(self, assignee_type: str, assignee_oid: str, role_oid: str, relationship: str, message: str) -> dict:
-        result = self._add_assignment_or_inducement(relationship=relationship, assignee_type=assignee_type, assignee_oid=assignee_oid, target_type="RoleType", target_oid=role_oid)
+        result = self._add_assignment_or_inducement(relationship=relationship, assignee_type=assignee_type, assignee_oid=assignee_oid, target_type="RoleType", target_oid=role_oid, relation_type=RELATION_TYPE_DEFAULT)
         return {"role_name": result["target_name"], "status": result["status"], "message": message}
 
 
@@ -257,15 +264,15 @@ class MidpointClient:
         self.logger.debug(f"Starting: resource_oid={resource_oid}, resource_name={resource_name}, role_oid={role_oid}, role_name={role_name}")
         resolved_resource_oid = self._resolve_oid(object_type="ResourceType", oid=resource_oid, name=resource_name)
         resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
-        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_role_oid, target_type="ResourceType", target_oid=resolved_resource_oid)
+        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_role_oid, target_type="ResourceType", target_oid=resolved_resource_oid, relation_type=RELATION_TYPE_DEFAULT)
         return {"resource_name": result["target_name"], "status": result["status"], "message": "Resource inducement added"}
 
 
-    def add_role_assignment_to_user(self, role_oid: str = None, role_name: str = None, user_oid: str = None, user_name: str = None) -> dict:
-        self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, user_oid={user_oid}, user_name={user_name}")
+    def add_role_assignment_to_user(self, role_oid: str = None, role_name: str = None, user_oid: str = None, user_name: str = None, relation_type: str = RELATION_TYPE_DEFAULT) -> dict:
+        self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, user_oid={user_oid}, user_name={user_name}, relation_type={relation_type}")
         resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
         resolved_user_oid = self._resolve_oid(object_type="UserType", oid=user_oid, name=user_name)
-        result = self._add_assignment_or_inducement(relationship="assignment", assignee_type="UserType", assignee_oid=resolved_user_oid, target_type="RoleType", target_oid=resolved_role_oid)
+        result = self._add_assignment_or_inducement(relationship="assignment", assignee_type="UserType", assignee_oid=resolved_user_oid, target_type="RoleType", target_oid=resolved_role_oid, relation_type=relation_type)
         return {"role_name": result["target_name"], "status": result["status"], "message": "Role assigned"}
 
 
@@ -273,7 +280,7 @@ class MidpointClient:
         self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, archetype_oid={archetype_oid}, archetype_name={archetype_name}")
         resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
         resolved_archetype_oid = self._resolve_oid(object_type="ArchetypeType", oid=archetype_oid, name=archetype_name)
-        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="ArchetypeType", assignee_oid=resolved_archetype_oid, target_type="RoleType", target_oid=resolved_role_oid)
+        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="ArchetypeType", assignee_oid=resolved_archetype_oid, target_type="RoleType", target_oid=resolved_role_oid, relation_type=RELATION_TYPE_DEFAULT)
         return {"role_name": result["target_name"], "status": result["status"], "message": "Role induced to archetype"}
 
 
@@ -281,7 +288,7 @@ class MidpointClient:
         self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, assignee_oid={assignee_oid}, assignee_name={assignee_name}")
         resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
         resolved_assignee_oid = self._resolve_oid(object_type="ArchetypeType", oid=assignee_oid, name=assignee_name)
-        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_assignee_oid, target_type="RoleType", target_oid=resolved_role_oid)
+        result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_assignee_oid, target_type="RoleType", target_oid=resolved_role_oid, relation_type=RELATION_TYPE_DEFAULT)
         return {"role_name": result["target_name"], "status": result["status"], "message": "Role induced to role"}
 
 
