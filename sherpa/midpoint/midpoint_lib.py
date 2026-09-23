@@ -287,7 +287,7 @@ class MidpointClient:
     def add_role_inducement_to_role(self, role_oid: str = None, role_name: str = None, assignee_oid: str = None, assignee_name: str = None) -> dict:
         self.logger.debug(f"Starting: role_oid={role_oid}, role_name={role_name}, assignee_oid={assignee_oid}, assignee_name={assignee_name}")
         resolved_role_oid = self._resolve_oid(object_type="RoleType", oid=role_oid, name=role_name)
-        resolved_assignee_oid = self._resolve_oid(object_type="ArchetypeType", oid=assignee_oid, name=assignee_name)
+        resolved_assignee_oid = self._resolve_oid(object_type="RoleType", oid=assignee_oid, name=assignee_name)
         result = self._add_assignment_or_inducement(relationship="inducement", assignee_type="RoleType", assignee_oid=resolved_assignee_oid, target_type="RoleType", target_oid=resolved_role_oid, relation_type=RELATION_TYPE_DEFAULT)
         return {"role_name": result["target_name"], "status": result["status"], "message": "Role induced to role"}
 
