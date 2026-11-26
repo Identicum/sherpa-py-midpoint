@@ -39,6 +39,7 @@ object_types = [
     {"type": "FormType",                          "element_name": "form",                          "endpoint": "forms",                          "import_order": 5, "oid_block_b": "0015"},
     {"type": 'SchemaType',                        'element_name': 'schema',                        'endpoint': 'schemas',                        'import_order': 0, 'oid_block_b': '0017'},
     {"type": 'ReportType',                        'element_name': 'report',                        'endpoint': 'reports',                        'import_order': 6, 'oid_block_b': '0018'},
+    {"type": "CaseType",                          "element_name": "case",                          "endpoint": "cases",                          "import_order": None, "oid_block_b": None},
 ]
 
 CONTENT_TYPE_XML = "application/xml"
