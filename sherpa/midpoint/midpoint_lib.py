@@ -330,6 +330,14 @@ class MidpointClient:
         return self._normalize_object(object)
 
 
+    def get_user_oid(self, name: str) -> str:
+        self.logger.debug(f"Starting: name={name}")
+        object = self._search_object_by_name(object_type="UserType", object_name=name)
+        oid = object.get("oid")
+        self.logger.trace(f"oid: {oid}")
+        return oid
+
+
     # ###############################################################################
     # Task
 
