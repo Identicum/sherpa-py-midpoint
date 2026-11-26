@@ -334,6 +334,8 @@ class MidpointClient:
         self.logger.debug(f"Starting: name={name}")
         object = self._search_object_by_name(object_type="UserType", object_name=name)
         oid = object.get("oid")
+        if not oid:
+            validators.raise_and_log(self.logger, MidpointError, f"User not found: name={name}")
         self.logger.trace(f"oid: {oid}")
         return oid
 
